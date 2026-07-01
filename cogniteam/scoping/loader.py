@@ -95,6 +95,7 @@ class BlueprintLoader:
             "priority": archetype_data.get("priority", ""),
             "domain_rules": domain_rules or [],
             "stack": archetype_data.get("stack", {}),
+            "keywords": archetype_data.get("keywords", []),
             "required_parameters": required,
             "optional_parameters": optional,
         }
@@ -143,14 +144,24 @@ Si no encaja: "generic.generic-task".
 """
 
 
+def _domain_line(d: dict, loader: BlueprintLoader) -> str:
+    arch_parts = []
+    for ak in d["archetypes"]:
+        bp = loader.get_blueprint(d["key"], ak)
+        kw = bp.get("keywords", []) if bp else []
+        if kw:
+            arch_parts.append(f"{ak} ({', '.join(kw[:4])})")
+        else:
+            arch_parts.append(ak)
+    arch_list = ", ".join(arch_parts)
+    return f"  {d['key']} ({d['name']}): {arch_list}"
+
+
 def classify_task(prompt: str) -> Tuple[str, str, float, str]:
     """Returns (domain_key, archetype_key, confidence, reasoning)."""
     loader = BlueprintLoader()
     domains = loader.get_domain_list()
-    domain_lines = []
-    for d in domains:
-        arch_list = ", ".join(d["archetypes"])
-        domain_lines.append(f"  {d['key']} ({d['name']}): {arch_list}")
+    domain_lines = [_domain_line(d, loader) for d in domains]
     domain_list_str = "\n".join(domain_lines)
 
     full_prompt = _CLASSIFICATION_PROMPT.format(domain_list=domain_list_str, task=prompt)
@@ -194,10 +205,7 @@ def classify_task_multi(prompt: str) -> List[Dict[str, Any]]:
     """Returns a list of classification dicts: [{domain_key, archetype_key, confidence, reasoning, is_primary}, ...]."""
     loader = BlueprintLoader()
     domains = loader.get_domain_list()
-    domain_lines = []
-    for d in domains:
-        arch_list = ", ".join(d["archetypes"])
-        domain_lines.append(f"  - {d['key']}: {arch_list}")
+    domain_lines = [_domain_line(d, loader) for d in domains]
     domain_list_str = "\n".join(domain_lines)
 
     full_prompt = _MULTI_CLASSIFICATION_PROMPT.format(domain_list=domain_list_str, task=prompt)
@@ -231,6 +239,9 @@ def classify_task_multi(prompt: str) -> List[Dict[str, Any]]:
             r.setdefault("is_primary", False)
         if not any(r.get("is_primary") for r in results):
             results[0]["is_primary"] = True
+        primary = [r for r in results if r.get("is_primary")]
+        secondary = [r for r in results if not r.get("is_primary") and r.get("confidence", 0) >= 0.35]
+        results = primary + secondary
         return results[:3]
     except (json.JSONDecodeError, ValueError, TypeError, KeyError):
         return [{"domain_key": "generic", "archetype_key": "generic-task", "confidence": 0.0, "reasoning": "Error parseando JSON", "is_primary": True}]

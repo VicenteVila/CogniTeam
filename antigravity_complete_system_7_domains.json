@@ -52,6 +52,15 @@
           "optional_parameters": [
             "custom_domain",
             "analytics_id"
+          ],
+          "keywords": [
+            "pagina web",
+            "sitio web",
+            "marketing",
+            "conversion",
+            "lead",
+            "presentacion",
+            "landing page"
           ]
         },
         "ecommerce": {
@@ -71,6 +80,15 @@
           "optional_parameters": [
             "shipping_webhooks",
             "tax_rules"
+          ],
+          "keywords": [
+            "tienda online",
+            "comercio electronico",
+            "productos",
+            "carrito",
+            "pagos",
+            "shop",
+            "store"
           ]
         },
         "saas-dashboard": {
@@ -89,6 +107,18 @@
           "optional_parameters": [
             "dark_mode_default",
             "multi_tenant"
+          ],
+          "keywords": [
+            "dashboard",
+            "panel",
+            "graficos",
+            "analytics",
+            "kpi",
+            "metricas",
+            "datos en vivo",
+            "real-time",
+            "charts",
+            "widgets"
           ]
         },
         "blog-content": {
@@ -106,6 +136,15 @@
           "optional_parameters": [
             "newsletter_form",
             "rss_feed"
+          ],
+          "keywords": [
+            "blog",
+            "articulo",
+            "post",
+            "contenido editorial",
+            "cms",
+            "markdown",
+            "noticias"
           ]
         },
         "portfolio-creative": {
@@ -123,6 +162,14 @@
           "optional_parameters": [
             "custom_cursor_enabled",
             "theme_toggle"
+          ],
+          "keywords": [
+            "portafolio",
+            "galeria",
+            "artista",
+            "creativo",
+            "muestra",
+            "trabajos"
           ]
         },
         "corporate-business": {
@@ -140,6 +187,13 @@
           "optional_parameters": [
             "multilingual",
             "crm_integration"
+          ],
+          "keywords": [
+            "corporativo",
+            "empresa",
+            "negocio",
+            "institucional",
+            "servicios"
           ]
         }
       }
@@ -176,6 +230,14 @@
           "optional_parameters": [
             "biometric_auth",
             "push_notifications"
+          ],
+          "keywords": [
+            "app movil",
+            "aplicacion movil",
+            "android",
+            "ios",
+            "flutter",
+            "react native"
           ]
         },
         "backend-apis": {
@@ -193,6 +255,14 @@
           "optional_parameters": [
             "rate_limiting",
             "cors_origins"
+          ],
+          "keywords": [
+            "api",
+            "backend",
+            "servicio web",
+            "rest",
+            "endpoint",
+            "microservicio"
           ]
         },
         "databases": {
@@ -210,6 +280,14 @@
           "optional_parameters": [
             "connection_pooling",
             "replication"
+          ],
+          "keywords": [
+            "base de datos",
+            "bd",
+            "almacenamiento",
+            "sql",
+            "nosql",
+            "esquema"
           ]
         },
         "devops-infra": {
@@ -227,6 +305,14 @@
           "optional_parameters": [
             "monitoring_stack",
             "ssl_automation"
+          ],
+          "keywords": [
+            "devops",
+            "infraestructura",
+            "docker",
+            "ci-cd",
+            "despliegue",
+            "contenedores"
           ]
         },
         "machine-learning": {
@@ -244,6 +330,14 @@
           "optional_parameters": [
             "quantization_bits",
             "gpu_acceleration"
+          ],
+          "keywords": [
+            "machine learning",
+            "ia",
+            "modelo",
+            "entrenamiento",
+            "prediccion",
+            "datos"
           ]
         }
       }
@@ -280,6 +374,13 @@
           "optional_parameters": [
             "discord_webhook_sync",
             "github_classroom"
+          ],
+          "keywords": [
+            "bootcamp",
+            "curso intensivo",
+            "formacion",
+            "cohorte",
+            "campamento"
           ]
         },
         "moocs": {
@@ -297,6 +398,13 @@
           "optional_parameters": [
             "subtitles_languages",
             "drip_feed"
+          ],
+          "keywords": [
+            "mooc",
+            "curso online",
+            "masivo",
+            "elearning",
+            "video curso"
           ]
         },
         "certifications": {
@@ -315,6 +423,12 @@
           "optional_parameters": [
             "proctoring_ai_enabled",
             "expiration_years"
+          ],
+          "keywords": [
+            "certificacion",
+            "examen",
+            "evaluacion",
+            "credencial"
           ]
         },
         "corporate-training": {
@@ -332,6 +446,11 @@
           "optional_parameters": [
             "sso_saml_integration",
             "custom_branding"
+          ],
+          "keywords": [
+            "capacitacion",
+            "entrenamiento corporativo",
+            "formacion empresa"
           ]
         },
         "k12-curriculum": {
@@ -349,6 +468,15 @@
           "optional_parameters": [
             "screen_time_limiter",
             "printable_sheets_pdf"
+          ],
+          "keywords": [
+            "k12",
+            "curriculo",
+            "escolar",
+            "ninos",
+            "educacion basica",
+            "primaria",
+            "secundaria"
           ]
         }
       }
@@ -385,6 +513,13 @@
           "optional_parameters": [
             "sub_brands_hierarchy",
             "typography_licensing"
+          ],
+          "keywords": [
+            "branding",
+            "identidad corporativa",
+            "marca",
+            "logo",
+            "diseno grafico"
           ]
         },
         "editorial-layout": {
@@ -400,6 +535,13 @@
           "optional_parameters": [
             "print_bleed_specs",
             "digital_interactivity"
+          ],
+          "keywords": [
+            "editorial",
+            "maquetacion",
+            "revista",
+            "publicacion",
+            "layout"
           ]
         },
         "ui-ux-prototyping": {
@@ -415,6 +557,14 @@
           "optional_parameters": [
             "animation_curves",
             "accessibility_contrast_map"
+          ],
+          "keywords": [
+            "ui",
+            "ux",
+            "prototipo",
+            "interfaz",
+            "figma",
+            "wireframe"
           ]
         }
       }
@@ -450,6 +600,12 @@
           "optional_parameters": [
             "hvac_integration_specs",
             "material_takeoff_format"
+          ],
+          "keywords": [
+            "bim",
+            "modelado 3d",
+            "arquitectura",
+            "construccion"
           ]
         },
         "render-visualization": {
@@ -466,6 +622,12 @@
           "optional_parameters": [
             "animation_flythrough_duration",
             "output_resolution_target"
+          ],
+          "keywords": [
+            "render",
+            "visualizacion 3d",
+            "arquitectonico",
+            "realista"
           ]
         }
       }
@@ -506,6 +668,12 @@
           "optional_parameters": [
             "lookalike_ratio",
             "ab_testing_variants"
+          ],
+          "keywords": [
+            "campania",
+            "marketing",
+            "lanzamiento",
+            "publicidad"
           ]
         },
         "seo-content-strategy": {
@@ -522,6 +690,12 @@
           "optional_parameters": [
             "backlink_target_velocity",
             "schema_markup_types"
+          ],
+          "keywords": [
+            "seo",
+            "contenido",
+            "estrategia",
+            "posicionamiento"
           ]
         },
         "automation-emailing": {
@@ -538,6 +712,12 @@
           "optional_parameters": [
             "dkim_spf_verification",
             "dynamic_personalization_tags"
+          ],
+          "keywords": [
+            "automacion",
+            "email",
+            "correo",
+            "newsletter"
           ]
         }
       }
@@ -575,6 +755,11 @@
           "optional_parameters": [
             "color_grading_lut",
             "subtitles_style_json"
+          ],
+          "keywords": [
+            "video",
+            "produccion audiovisual",
+            "edicion"
           ]
         },
         "business-operations": {
@@ -591,6 +776,11 @@
           "optional_parameters": [
             "risk_mitigation_matrix",
             "kpi_webhook_alerts"
+          ],
+          "keywords": [
+            "operaciones",
+            "gestion empresarial",
+            "business"
           ]
         }
       }
@@ -629,6 +819,11 @@
           "optional_parameters": [
             "leaderboard_integration",
             "social_sharing"
+          ],
+          "keywords": [
+            "juego movil",
+            "casual",
+            "mobile game"
           ]
         },
         "pc-console": {
@@ -649,6 +844,12 @@
             "multiplayer_type",
             "steam_epic_integration",
             "controller_support"
+          ],
+          "keywords": [
+            "juego pc",
+            "consola",
+            "videojuego",
+            "pc game"
           ]
         },
         "multiplayer-online": {
@@ -668,6 +869,11 @@
             "anti_cheat_solution",
             "matchmaking_type",
             "region_deployment"
+          ],
+          "keywords": [
+            "multijugador",
+            "online",
+            "mmo"
           ]
         },
         "vr-ar": {
@@ -687,6 +893,12 @@
             "hand_tracking",
             "room_scale",
             "spectator_screen"
+          ],
+          "keywords": [
+            "realidad virtual",
+            "realidad aumentada",
+            "vr",
+            "ar"
           ]
         },
         "game-tools": {
@@ -703,6 +915,11 @@
           "optional_parameters": [
             "ui_for_designers",
             "documentation_format"
+          ],
+          "keywords": [
+            "herramientas",
+            "game dev tools",
+            "editor"
           ]
         }
       }
@@ -739,6 +956,12 @@
           "optional_parameters": [
             "missing_data_strategy",
             "outlier_treatment"
+          ],
+          "keywords": [
+            "analisis exploratorio",
+            "eda",
+            "datos",
+            "exploracion"
           ]
         },
         "ml-modeling": {
@@ -756,6 +979,12 @@
           "optional_parameters": [
             "hyperparameter_optimization",
             "gpu_acceleration"
+          ],
+          "keywords": [
+            "modelo predictivo",
+            "clasificacion",
+            "regresion",
+            "machine learning model"
           ]
         },
         "dashboard-reporting": {
@@ -773,6 +1002,14 @@
           "optional_parameters": [
             "refresh_frequency",
             "alerting_rules"
+          ],
+          "keywords": [
+            "dashboard reporting",
+            "panel datos",
+            "kpi",
+            "visualizacion datos",
+            "streamlit",
+            "grafana"
           ]
         },
         "etl-pipeline": {
@@ -791,6 +1028,13 @@
           "optional_parameters": [
             "incremental_load_strategy",
             "data_quality_checks"
+          ],
+          "keywords": [
+            "etl",
+            "pipeline datos",
+            "extraccion",
+            "transformacion",
+            "data pipeline"
           ]
         },
         "ab-testing": {
@@ -808,6 +1052,12 @@
           "optional_parameters": [
             "sequential_testing",
             "segmentation_variables"
+          ],
+          "keywords": [
+            "a/b testing",
+            "experimento",
+            "prueba",
+            "hipotesis"
           ]
         }
       }
@@ -845,6 +1095,12 @@
           "optional_parameters": [
             "code_examples_included",
             "translation_target_languages"
+          ],
+          "keywords": [
+            "documentacion tecnica",
+            "manual",
+            "guia tecnica",
+            "wiki"
           ]
         },
         "copywriting-marketing": {
@@ -862,6 +1118,11 @@
           "optional_parameters": [
             "competitor_examples",
             "seo_keywords"
+          ],
+          "keywords": [
+            "copywriting",
+            "texto marketing",
+            "redaccion publicitaria"
           ]
         },
         "blog-article": {
@@ -879,6 +1140,12 @@
           "optional_parameters": [
             "internal_links",
             "featured_image_style"
+          ],
+          "keywords": [
+            "blog",
+            "articulo blog",
+            "redaccion",
+            "contenido escrito"
           ]
         },
         "translation-localization": {
@@ -896,6 +1163,11 @@
           "optional_parameters": [
             "context_screenshots",
             "locale_variants"
+          ],
+          "keywords": [
+            "traduccion",
+            "localizacion",
+            "idiomas"
           ]
         },
         "ux-writing": {
@@ -912,6 +1184,11 @@
           "optional_parameters": [
             "error_message_catalog",
             "onboarding_script"
+          ],
+          "keywords": [
+            "ux writing",
+            "microcopy",
+            "interfaz texto"
           ]
         }
       }
@@ -950,6 +1227,11 @@
           "optional_parameters": [
             "cache_strategy",
             "artifact_retention_days"
+          ],
+          "keywords": [
+            "ci-cd",
+            "integracion continua",
+            "despliegue continuo"
           ]
         },
         "kubernetes-deployment": {
@@ -968,6 +1250,12 @@
           "optional_parameters": [
             "ingress_controller",
             "cert_manager_integration"
+          ],
+          "keywords": [
+            "kubernetes",
+            "k8s",
+            "orquestacion",
+            "contenedores"
           ]
         },
         "terraform-infra": {
@@ -986,6 +1274,11 @@
           "optional_parameters": [
             "module_registry",
             "workspace_strategy"
+          ],
+          "keywords": [
+            "terraform",
+            "iac",
+            "infraestructura codigo"
           ]
         },
         "monitoring-observability": {
@@ -1005,6 +1298,12 @@
           "optional_parameters": [
             "sla_slo_targets",
             "on_call_rotation"
+          ],
+          "keywords": [
+            "monitoreo",
+            "observabilidad",
+            "alertas",
+            "logs"
           ]
         },
         "disaster-recovery": {
@@ -1022,6 +1321,12 @@
           "optional_parameters": [
             "failover_playbook",
             "chaos_engineering_tests"
+          ],
+          "keywords": [
+            "recuperacion",
+            "desastre",
+            "backup",
+            "alta disponibilidad"
           ]
         }
       }
@@ -1058,6 +1363,11 @@
           "optional_parameters": [
             "excluded_paths",
             "severity_threshold"
+          ],
+          "keywords": [
+            "auditoria seguridad",
+            "pentest",
+            "vulnerabilidades"
           ]
         },
         "penetration-testing": {
@@ -1075,6 +1385,11 @@
           "optional_parameters": [
             "credentialed_access",
             "report_template"
+          ],
+          "keywords": [
+            "pentesting",
+            "prueba penetracion",
+            "hacking etico"
           ]
         },
         "compliance-hardening": {
@@ -1091,6 +1406,12 @@
           "optional_parameters": [
             "remediation_playbook",
             "exception_requests"
+          ],
+          "keywords": [
+            "cumplimiento",
+            "hardening",
+            "normativa",
+            "seguridad"
           ]
         },
         "incident-response": {
@@ -1107,6 +1428,12 @@
           "optional_parameters": [
             "forensic_artifacts",
             "communication_template"
+          ],
+          "keywords": [
+            "incidente",
+            "respuesta",
+            "ciberseguridad",
+            "ataque"
           ]
         }
       }
@@ -1144,6 +1471,12 @@
           "optional_parameters": [
             "cookies_policy_section",
             "data_retention_periods"
+          ],
+          "keywords": [
+            "privacidad",
+            "politica privacidad",
+            "datos personales",
+            "rgpd"
           ]
         },
         "terms-of-service": {
@@ -1161,6 +1494,11 @@
           "optional_parameters": [
             "arbitration_clause",
             "free_trial_terms"
+          ],
+          "keywords": [
+            "terminos servicio",
+            "condiciones",
+            "legal"
           ]
         },
         "compliance-checklist": {
@@ -1177,6 +1515,11 @@
           "optional_parameters": [
             "evidence_requirements",
             "remediation_deadline"
+          ],
+          "keywords": [
+            "cumplimiento legal",
+            "checklist",
+            "normativa"
           ]
         },
         "data-processing-agreement": {
@@ -1194,6 +1537,12 @@
           "optional_parameters": [
             "subprocessor_list",
             "international_transfer_mechanism"
+          ],
+          "keywords": [
+            "dpa",
+            "datos",
+            "acuerdo procesamiento",
+            "proteccion datos"
           ]
         }
       }
