@@ -30,11 +30,4 @@ jobs:
           echo "use_scoping_agent=True" >> .env
 
       - name: Run tests
-        run: |
-          exit_code=0
-          pytest tests/ -v --tb=long 2>&1 | tee /tmp/test_output.txt || exit_code=$?
-          echo '## Test output' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/test_output.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          exit $exit_code
+        run: pytest tests/ -v --tb=short
