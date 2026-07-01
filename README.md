@@ -83,10 +83,16 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 .venv\Scripts\activate      # Windows
 
-# 3. Instalar dependencias
-pip install -e .
+# 3. Instalar dependencias base
+pip install -e ".[dev]"
 
-# 4. Configurar (editar .env)
+# 4. (Opcional) Añadir extras según necesidades:
+pip install -e ".[ml]"     # RAG con embeddings y chroma
+pip install -e ".[web]"    # Web scraping
+pip install -e ".[pdf]"    # Generación de PDFs
+pip install -e ".[tts]"    # Text-to-speech
+
+# 5. Configurar (editar .env)
 cp .env.example .env
 ```
 
