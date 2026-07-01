@@ -134,8 +134,6 @@ def _groq_available(task: str) -> bool:
 
     if not settings.use_groq or not settings.groq_api_key:
         return False
-    if task == "code":
-        return False
     return check_rate_limit("groq", max_per_day=14000, max_per_minute=30)
 
 
