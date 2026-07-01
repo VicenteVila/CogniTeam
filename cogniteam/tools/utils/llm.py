@@ -213,6 +213,8 @@ def llm_complete(
     return None
 
 
+_CTRL_CHAR_RE = re.compile(r"[\n\r\t\b\f]")
+
 def _escape_control_chars_in_match(match_obj: re.Match) -> str:
     s = match_obj.group(0)
     if not (s.startswith('"') and s.endswith('"')):
@@ -221,7 +223,7 @@ def _escape_control_chars_in_match(match_obj: re.Match) -> str:
     control_char_map = {"\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
     def replace_char(char_match):
         return control_char_map.get(char_match.group(0), char_match.group(0))
-    return f'"{re.compile(r"[\n\r\t\b\f]").sub(replace_char, content)}"'
+    return f'"{_CTRL_CHAR_RE.sub(replace_char, content)}"'
 
 
 def sanitize_json_string_for_control_chars(json_string: str) -> str:

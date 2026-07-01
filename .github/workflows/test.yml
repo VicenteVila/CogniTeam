@@ -30,6 +30,4 @@ jobs:
           echo "use_scoping_agent=True" >> .env
 
       - name: Run tests
-        run: |
-          python -c "from cogniteam.config.settings import settings; print(f'OLLAMA={settings.use_ollama} GROQ={settings.use_groq} AGENT={settings.use_scoping_agent}')"
-          pytest tests/ -v --tb=long 2>&1
+        run: pytest tests/ -v --tb=short
