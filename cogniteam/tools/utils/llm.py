@@ -155,7 +155,7 @@ def llm_complete(
 
     # Try Groq for non-code tasks first
     if _groq_available(task):
-        groq_model = settings.groq_model_reasoning if task in ("reasoning", "planning", "code") else settings.groq_model_fast
+        groq_model = settings.groq_model_reasoning if task in ("reasoning", "planning", "code", "extract") else settings.groq_model_fast
         print(f"  >> LLM (Groq): {groq_model}, prompt={len(prompt)}c, max_tokens={max_tokens}")
         result = _groq_complete(
             model_name=groq_model,
