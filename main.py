@@ -48,6 +48,7 @@ def _build_tool_map() -> Dict[str, Callable]:
     from cogniteam.tools.scripting.proposals import apply_script, propose_script, validate_script, view_script_diff
     from cogniteam.tools.scripting.terminal import execute_terminal_command_safe
     from cogniteam.tools.ui.analyze import analyze_html_js
+    from cogniteam.tools.ui.combine import combine_ui_to_html
     from cogniteam.tools.ui.css import generate_css_code
     from cogniteam.tools.ui.fix import fix_ui_code
     from cogniteam.tools.ui.html import generate_ui_code
@@ -63,6 +64,7 @@ def _build_tool_map() -> Dict[str, Callable]:
         generate_ui_code,
         generate_css_code,
         generate_js_code,
+        combine_ui_to_html,
         generate_textual_artifact,
         analyze_html_js,
         fix_ui_code,
@@ -97,6 +99,7 @@ def _build_tool_map() -> Dict[str, Callable]:
 def _categorize_tools(tool_map: Dict[str, Callable]) -> Dict[str, List[Callable]]:
     ui_tools_names = {
         "generate_ui_code", "generate_css_code", "generate_js_code",
+        "combine_ui_to_html",
         "generate_textual_artifact", "analyze_html_js", "fix_ui_code",
         "read_file_sandboxed", "write_file_sandboxed",
     }
@@ -286,8 +289,35 @@ async def main():
     )
 
     # Build tools/agents descriptions for planner prompt
+    TOOL_DESCRIPTIONS = {
+        "generate_ui_code": "Genera HTML completo desde descripcion en lenguaje natural. Output: HTML string.",
+        "generate_css_code": "Genera CSS desde descripcion en lenguaje natural. Output: CSS string.",
+        "generate_js_code": "Genera JS desde descripcion en lenguaje natural. Output: JS string.",
+        "combine_ui_to_html": "Toma HTML, CSS, JS y los combina en un unico archivo HTML con CSS/JS inline. Output: HTML final.",
+        "generate_textual_artifact": "Genera documentacion, descripciones o archivos de texto desde descripcion natural.",
+        "analyze_html_js": "Analiza y depura codigo HTML/JS. Output: analisis con errores encontrados.",
+        "write_file_sandboxed": "Escribe contenido en un archivo. Usa rutas relativas. Crea directorios automaticamente.",
+        "read_file_sandboxed": "Lee el contenido de un archivo existente.",
+        "list_files_sandboxed": "Lista archivos en un directorio.",
+        "create_directory_sandboxed": "Crea un directorio (usualmente no necesario, write_file_sandboxed ya lo hace).",
+        "validate_script": "Valida sintaxis de un script bash/shell. Corre sin confirmacion. Output: resultado de validacion.",
+        "propose_script": "Genera un script bash desde descripcion en lenguaje natural.",
+        "view_script_diff": "Muestra diferencias entre contenido actual y nuevo de un archivo.",
+        "web_search_real": "Busca informacion en la web. Output: resultados de busqueda.",
+        "browse_web_page": "Navega a una URL y extrae su contenido textual.",
+        "extract_info_from_text": "Extrae informacion estructurada desde texto usando un schema dado.",
+        "call_api_real": "Hace una llamada HTTP GET a una API externa.",
+    }
+    HIDDEN_TOOLS = {"fix_ui_code", "delete_file_sandboxed", "delete_directory_sandboxed",
+                    "move_or_rename_sandboxed", "git_status", "git_add", "git_commit",
+                    "git_diff", "git_log", "git_push", "git_pull",
+                    "execute_terminal_command_safe", "apply_script",
+                    "create_pdf_from_text", "generar_guia_cocoguide", "speak_text"}
+
     tools_desc_lines = []
     for name in sorted(tool_map.keys()):
+        if name in HIDDEN_TOOLS:
+            continue
         fn = tool_map[name]
         sig = inspect.signature(fn)
         params = []
@@ -296,7 +326,11 @@ async def main():
             ptype = p.annotation if p.annotation is not inspect.Parameter.empty else "str"
             params.append(f"{pname}:{ptype}({kind})")
         param_str = ", ".join(params) if params else ""
-        tools_desc_lines.append(f"- `{name}`: {param_str}")
+        desc = TOOL_DESCRIPTIONS.get(name, "")
+        if desc:
+            tools_desc_lines.append(f"- `{name}({param_str})`: {desc}")
+        else:
+            tools_desc_lines.append(f"- `{name}`: {param_str}")
     tools_description = "\n".join(tools_desc_lines)
 
     agents_description = (

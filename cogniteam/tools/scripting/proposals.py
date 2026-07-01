@@ -83,9 +83,35 @@ def validate_script(script: str) -> Dict[str, str]:
     print("\n-- [validate_script] Validando script")
     if not script:
         return {"result": "Error: script vacío."}
+    if len(script) > 50000:
+        return {"result": "Error: script demasiado largo (>50000c)."}
 
-    result = execute_terminal_command_safe(f"bash -n <<< '{script}'")
-    return result
+    import subprocess
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(script)
+            tmppath = f.name
+
+        proc = subprocess.run(
+            ["bash", "-n", tmppath],
+            capture_output=True, text=True, timeout=30,
+        )
+        os.unlink(tmppath)
+
+        if proc.returncode == 0:
+            return {"result": "✓ Sintaxis válida."}
+        else:
+            msg = proc.stderr.strip() or proc.stdout.strip() or "Error de sintaxis"
+            return {"result": f"✗ Error de sintaxis:\n{msg}"}
+    except subprocess.TimeoutExpired:
+        return {"result": "⚠ Timeout validando sintaxis."}
+    except FileNotFoundError:
+        return {"result": "⚠ bash no disponible en PATH."}
+    except Exception as e:
+        return {"result": f"Error validando: {e}"}
 
 
 def view_script_diff(filepath: str, new_content: str) -> Dict[str, str]:

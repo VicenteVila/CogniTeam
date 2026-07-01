@@ -26,6 +26,7 @@ def _validate_output(
 ) -> bool:
     if not expected_format:
         return True
+    expected_format = expected_format.lower()
     check = output
     if isinstance(output, dict) and "success" in output and "message" in output:
         if expected_format == "tool_response_dict":
