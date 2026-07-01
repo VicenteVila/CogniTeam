@@ -30,4 +30,4 @@ jobs:
           echo "use_scoping_agent=True" >> .env
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=long 2>&1
