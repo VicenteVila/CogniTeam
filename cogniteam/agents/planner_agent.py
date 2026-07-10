@@ -942,26 +942,26 @@ def generate_world_model(
 # Cada entrada es el ejemplo que se inyecta en PLANNER_INSTRUCTION_TEMPLATE.
 # Solo se muestra UN ejemplo por ejecución (el del dominio actual).
 FEWSHOT_UI = """EJEMPLO (UI/Landing Page):
-{{"steps":[
-  {{"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML principal de la landing page", "tool_to_use":"generate_ui_code", "inputs":{{"description":"Landing page moderna con navbar, hero, galería y contacto"}}, "output_variable_name":"html_code", "expected_output_format":"html"}},
-  {{"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS para la landing page", "tool_to_use":"generate_css_code", "inputs":{{"description":"CSS oscuro con acentos dorados"}}, "output_variable_name":"css_code", "expected_output_format":"css"}},
-  {{"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar JS para la landing page", "tool_to_use":"generate_js_code", "inputs":{{"description":"JS para smooth scroll y formulario de contacto"}}, "output_variable_name":"js_code", "expected_output_format":"javascript"}},
-  {{"step":4, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en un unico index.html", "tool_to_use":"combine_ui_to_html", "inputs":{{"html":"{{{{html_code}}}}", "css":"{{{{css_code}}}}", "js":"{{{{js_code}}}}", "filepath":"index.html"}}, "output_variable_name":"html_final", "expected_output_format":"html"}}
-]}}"""
+{"steps":[
+  {"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML principal de la landing page", "tool_to_use":"generate_ui_code", "inputs":{"description":"Landing page moderna con navbar, hero, galería y contacto"}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS para la landing page", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS oscuro con acentos dorados"}, "output_variable_name":"css_code", "expected_output_format":"css"},
+  {"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar JS para la landing page", "tool_to_use":"generate_js_code", "inputs":{"description":"JS para smooth scroll y formulario de contacto"}, "output_variable_name":"js_code", "expected_output_format":"javascript"},
+  {"step":4, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en un unico index.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"index.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
+]}"""
 
 FEWSHOT_SCRIPT = """EJEMPLO (Scripting — cadena genera→escribe→ejecuta→verifica):
-{{"steps":[
-  {{"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar script Python para analizar datos y producir output", "tool_to_use":"generate_textual_artifact", "inputs":{{"description_of_artifact":"Script Python que procesa datos y genera resultados"}}, "output_variable_name":"script_generado", "expected_output_format":"text"}},
-  {{"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Escribir el script a disco", "tool_to_use":"write_file_sandboxed", "inputs":{{"relative_filepath":"script.py", "content":"{{{{script_generado}}}}"}}, "output_variable_name":"archivo_escrito", "expected_output_format":"text"}},
-  {{"step":3, "agent":"DeveloperAgent_CogniTeam", "action_description":"Ejecutar el script para validar que funciona", "tool_to_use":"execute_terminal_command_safe", "inputs":{{"command":"python3 script.py"}}, "output_variable_name":"ejecucion", "expected_output_format":"text"}},
-  {{"step":4, "agent":"DeveloperAgent_CogniTeam", "action_description":"Verificar que los archivos generados existen", "tool_to_use":"list_files_sandboxed", "inputs":{{"relative_dirpath":"."}}, "output_variable_name":"verificacion", "expected_output_format":"text"}}
-]}}"""
+{"steps":[
+  {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar script Python para analizar datos y producir output", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Script Python que procesa datos y genera resultados"}, "output_variable_name":"script_generado", "expected_output_format":"text"},
+  {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Escribir el script a disco", "tool_to_use":"write_file_sandboxed", "inputs":{"relative_filepath":"script.py", "content":"{{script_generado}}"}, "output_variable_name":"archivo_escrito", "expected_output_format":"text"},
+  {"step":3, "agent":"DeveloperAgent_CogniTeam", "action_description":"Ejecutar el script para validar que funciona", "tool_to_use":"execute_terminal_command_safe", "inputs":{"command":"python3 script.py"}, "output_variable_name":"ejecucion", "expected_output_format":"text"},
+  {"step":4, "agent":"DeveloperAgent_CogniTeam", "action_description":"Verificar que los archivos generados existen", "tool_to_use":"list_files_sandboxed", "inputs":{"relative_dirpath":"."}, "output_variable_name":"verificacion", "expected_output_format":"text"}
+]}"""
 
 FEWSHOT_CONTENT = """EJEMPLO (Generación de contenido):
-{{"steps":[
-  {{"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar el contenido solicitado", "tool_to_use":"generate_textual_artifact", "inputs":{{"description_of_artifact":"Contenido/documento según los requisitos de la tarea"}}, "output_variable_name":"contenido", "expected_output_format":"text"}},
-  {{"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Persistir el contenido a disco como archivo", "tool_to_use":"write_file_sandboxed", "inputs":{{"relative_filepath":"output.txt", "content":"{{{{contenido}}}}"}}, "output_variable_name":"archivo", "expected_output_format":"text"}}
-]}}"""
+{"steps":[
+  {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar el contenido solicitado", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Contenido/documento según los requisitos de la tarea"}, "output_variable_name":"contenido", "expected_output_format":"text"},
+  {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Persistir el contenido a disco como archivo", "tool_to_use":"write_file_sandboxed", "inputs":{"relative_filepath":"output.txt", "content":"{{contenido}}"}, "output_variable_name":"archivo", "expected_output_format":"text"}
+]}"""
 
 DOMAIN_FEWSHOT_EXAMPLES: Dict[str, str] = {
     "1_web_development": FEWSHOT_UI,
@@ -993,7 +993,7 @@ REGLAS:
 9. validate_script valida sintaxis SOLO para scripts bash. NO funciona para Python. Para Python usa execute_terminal_command_safe directamente.
 10. generate_textual_artifact genera contenido SOLO EN MEMORIA. Siempre usa write_file_sandboxed despues para persistirlo a disco.
 11. Para tareas que requieran ejecutar scripts, la cadena completa es: generate_textual_artifact (crear) → write_file_sandboxed (persistir) → execute_terminal_command_safe (ejecutar) → list_files_sandboxed (verificar output).
-12. IMPORTANTE: Encadena datos entre pasos usando {{output_variable_name}} en los inputs. Si el paso 2 extrae informacion (ej: {{paper_info}}), pasala al paso 3 como "description": "Landing page con: {{paper_info}}". NO generes contenido vacio o placeholder — los datos fluyen mediante referencias.
+12. IMPORTANTE: Encadena datos entre pasos usando {{{{output_variable_name}}}} en los inputs. Si el paso 2 extrae informacion (ej: {{{{paper_info}}}}), pasala al paso 3 como "description": "Landing page con: {{{{paper_info}}}}". NO generes contenido vacio o placeholder — los datos fluyen mediante referencias.
 
 {fewshot_example}
 
