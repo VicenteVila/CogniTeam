@@ -391,6 +391,12 @@ async def main():
         requirements = manifest.clarified_task
         print(f"\nTarea clarificada ({len(requirements)}c). Iniciando ejecución...")
 
+    # ── Extraer dominio y arquetipo del manifest ──
+    _domain = manifest.classification.domain_key if manifest else ""
+    _archetype = manifest.classification.archetype_key if manifest else ""
+    if _domain and _archetype:
+        print(f"  Dominio: {_domain}.{_archetype}")
+
     # ── Snapshot de archivos antes de la ejecución ──
     import time as _time
     _timestamp = _time.strftime("%Y%m%d_%H%M%S")
@@ -411,6 +417,8 @@ async def main():
         tools_description=tools_description,
         agents_description=agents_description,
         memory_enabled=True,
+        domain=_domain,
+        archetype=_archetype,
     )
 
     # ── Generar reporte TraceForge ──
