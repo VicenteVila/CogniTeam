@@ -130,6 +130,16 @@ def _validate_output(
         return True
     expected_format = expected_format.lower()
     check = output
+
+    # Auto-parse JSON string if json format is expected
+    if expected_format == "json" and isinstance(check, str):
+        import json
+        try:
+            check = json.loads(check)
+            output = check
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     if isinstance(output, dict) and "success" in output and "message" in output:
         if expected_format == "tool_response_dict":
             return True
@@ -145,12 +155,6 @@ def _validate_output(
     elif isinstance(output, dict) and "success" in output:
         if output.get("success"):
             check = output.get("data") or output.get("message") or ""
-    if not isinstance(check, str):
-        if isinstance(check, (dict, list)):
-            import json
-            check = json.dumps(check, ensure_ascii=False)
-        else:
-            check = str(check) if check is not None else ""
 
     valid = False
     if expected_format == "html":
@@ -178,9 +182,10 @@ def _validate_output(
         print(f"  Formato desconocido '{expected_format}'. Omitiendo validación.")
         return True
     if not valid:
+        _display = str(check)[:100] if not isinstance(check, str) else check[:100]
         print(
             f"  VALIDACIÓN: esperado '{expected_format}', recibido "
-            f"'{str(check)[:100]}' ({type(check).__name__})"
+            f"'{_display}' ({type(check).__name__})"
         )
     return valid
 
