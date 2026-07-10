@@ -57,8 +57,11 @@ Clasifica tareas en **13 dominios** y **55 arquetipos**, genera preguntas de cla
 | **Ollama** (local) | Clasificación rápida | `gemma3:latest` |
 | **Ollama** (local) | Código | `deepseek-coder:6.7b` |
 | **Groq** (cloud) | Extracción/clasificación | `llama-3.1-8b-instant` |
+| **NVIDIA** (cloud) | Embeddings | `nvidia/nv-embed-qa-4` |
+| **Mistral** (cloud) | Razonamiento alternativo | `mistral-large-latest` |
+| **Cerebras** (cloud) | Inferencia rápida | `llama-3.3-70b` |
 
-El sistema tiene **rate limiting** automático: cuando Groq alcanza su límite gratuito (14.400 req/día), fallback a Ollama local sin errores.
+Rate limiting automático: cuando Groq alcanza su límite gratuito (14.400 req/día), fallback a Ollama local.
 
 ---
 
@@ -92,7 +95,10 @@ pip install -e ".[web]"    # Web scraping
 pip install -e ".[pdf]"    # Generación de PDFs
 pip install -e ".[tts]"    # Text-to-speech
 
-# 5. Configurar (editar .env)
+# 5. (Opcional) Trazabilidad con TraceForge:
+pip install git+https://github.com/VicenteVila/TraceForge.git
+
+# 6. Configurar (editar .env)
 cp .env.example .env
 ```
 
@@ -107,6 +113,14 @@ ollama_model_fast=gemma3:latest
 # Para añadir Groq (razonamiento cloud, opcional):
 use_groq=True
 groq_api_key=gsk_tu_key_aqui
+
+# Otros proveedores (opcional):
+use_nvidia=True
+nvidia_api_key=nvapi-...
+use_mistral=True
+mistral_api_key=...
+use_cerebras=True
+cerebras_api_key=csk-...
 ```
 
 ### Modelos recomendados para Ollama
@@ -135,20 +149,15 @@ TAREA> formulario de contacto y presupuesto automático.
 TAREA> FIN_TAREA
 ```
 
-### Ejemplo: clasificación multi-arquetipo
+### Trazabilidad con TraceForge
 
-```
-[Scoping Agent] Analizando tarea...
+Cada llamada LLM queda registrada automáticamente (modelo, tokens, latencia, errores).
+Al finalizar la ejecución se generan:
 
-  ★ PRINCIPAL: 1_web_development.landing-page (conf: 85%)
-     La tarea requiere una landing page para captar clientes
+- `.cogniteam/traces/traceforge_report.html`
+- `.cogniteam/traces/traceforge_report.md`
 
-  SECUNDARIO: 2_software_development.mobile-apps (conf: 70%)
-     La tarea requiere una app para gestionar proyectos
-
-  SECUNDARIO: 5_video_production.video-production (conf: 60%)
-     La tarea requiere crear videos para redes sociales
-```
+Si un paso falla, el span captura quién (agente + modelo), dónde (tool + paso), por qué (mensaje de error) y coste estimado.
 
 ### Output
 
@@ -161,6 +170,7 @@ proyectos_finalizados/
     │   ├── index.html
     │   ├── styles.css
     │   └── script.js
+    ├── blog.md
     └── reporte.md
 ```
 
@@ -197,9 +207,10 @@ pytest tests/ -v
 ## Stack técnico
 
 - **Python 3.12** — asyncio, pydantic, typing
-- **LLM Providers** — Groq SDK, Ollama API, litellm (fallback)
+- **LLM Providers** — Groq SDK, Ollama API, litellm, OpenAI-compatible (NVIDIA, Mistral, Cerebras)
 - **Memoria** — networkx, sentence-transformers, chromadb, faiss
-- **Orquestación** — arquitectura propia basada en contexto compartido
+- **Orquestación** — arquitectura propia basada en contexto compartido + resolución de variables `{{var}}`
+- **Trazabilidad** — TraceForge (span capture de llamadas LLM con latencia, tokens y errores)
 - **Seguridad** — sandboxing de rutas, confirmación de comandos, rate limiting
 
 ---

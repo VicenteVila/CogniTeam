@@ -8,6 +8,10 @@ import sys
 import traceback
 from typing import Any, Callable, Dict, List
 
+from pathlib import Path
+
+import traceforge
+
 from cogniteam.agents import (
     create_debugger_agent,
     create_developer_agent,
@@ -158,10 +162,20 @@ def _save_result(flow_result: Dict, manifest, timestamp: str, snapshot_before: s
             src = os.path.join(settings.project_root, fp)
             dst = artifacts_dir / fp
             dst.parent.mkdir(parents=True, exist_ok=True)
+            # Excluir archivos del proyecto (main.py, etc.) que no deben moverse
+            if fp.startswith("main.py") or fp.startswith("cogniteam/") or fp.startswith("config/"):
+                print(f"  -> omitido (proyecto): {fp}")
+                continue
             try:
-                shutil.copy2(src, dst)
-            except Exception:
-                pass
+                shutil.move(src, dst)
+                print(f"  -> movido: {fp}")
+            except Exception as e:
+                try:
+                    shutil.copy2(src, dst)
+                    os.unlink(src)
+                    print(f"  -> copiado (move falló: {e}): {fp}")
+                except Exception as e2:
+                    print(f"  -> ERROR moviendo {fp}: {e} | copy2: {e2}")
 
     # ── 2. Summary report ──
     success = flow_result.get("success", False)
@@ -263,6 +277,11 @@ async def main():
         print("[Memoria] Todos los módulos de memoria inicializados.")
     except Exception as e:
         print(f"  [Memoria] Error inicializando memoria: {e}")
+
+    # ── Inicializar TraceForge ──
+    TRACEFORGE_DB = os.path.join(settings.project_root, ".cogniteam", "traceforge.db")
+    traceforge.configure(collector="sqlite", db_path=TRACEFORGE_DB)
+    print(f"  TraceForge activado → {TRACEFORGE_DB}")
 
     # Build tool map
     tool_map = _build_tool_map()
@@ -393,6 +412,18 @@ async def main():
         agents_description=agents_description,
         memory_enabled=True,
     )
+
+    # ── Generar reporte TraceForge ──
+    try:
+        trace_id = traceforge.get_last_trace_id()
+        if trace_id:
+            report_dir = Path(settings.project_root) / "proyectos_finalizados" / f"RUN_{_timestamp}"
+            report_dir.mkdir(parents=True, exist_ok=True)
+            traceforge.report(trace_id, format="html", output=str(report_dir / "traceforge_report.html"))
+            traceforge.report(trace_id, format="markdown", output=str(report_dir / "traceforge_report.md"))
+            print(f"  TraceForge reportes generados en {report_dir}/")
+    except Exception as e:
+        print(f"  TraceForge report error: {e}")
 
     # ── Guardar resultados en proyectos_finalizados/ ──
     _save_result(flow_result, manifest, _timestamp, _snapshot_before)

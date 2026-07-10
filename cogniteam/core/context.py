@@ -23,9 +23,9 @@ class StepContext:
 
             # Conditional placeholder: ##cond_var## ? true_val : false_val
             cond = re.fullmatch(
-                r"##([\w_]+(?:\.[\w_]+)*)##\s*\?\s*"
-                r"(##[\w_]+(?:\.[\w_]+)*##|null|'[^']*'|\"[^\"]*\"|[^\s#\"']+)\s*:\s*"
-                r"(##[\w_]+(?:\.[\w_]+)*##|null|'[^']*'|\"[^\"]*\"|[^\s#\"']+)",
+                r"(?:##|\{\{)([\w_]+(?:\.[\w_]+)*)(?:##|\}\})\s*\?\s*"
+                r"((?:##[\w_]+(?:\.[\w_]+)*##|\{\{[\w_]+(?:\.[\w_]+)*\}\})|null|'[^']*'|\"[^\"]*\"|[^\s#\"'{]+)\s*:\s*"
+                r"((?:##[\w_]+(?:\.[\w_]+)*##|\{\{[\w_]+(?:\.[\w_]+)*\}\})|null|'[^']*'|\"[^\"]*\"|[^\s#\"'{]+)",
                 value.strip(),
             )
             if cond:
@@ -37,7 +37,7 @@ class StepContext:
                 processed[key] = self._resolve_literal(selected)
                 continue
 
-            # Normal placeholder: ##var.attr.subattr##
+            # Normal placeholder: ##var.attr.subattr## or {{var.attr.subattr}}
             processed[key] = self._resolve_placeholder_deep(value, warnings)
 
         return processed, warnings
@@ -54,12 +54,12 @@ class StepContext:
             s.startswith("'") and s.endswith("'")
         ):
             return s[1:-1]
-        if s.startswith("##") and s.endswith("##"):
+        if (s.startswith("##") and s.endswith("##")) or (s.startswith("{{") and s.endswith("}}")):
             return self._resolve_placeholder(s)
         return s
 
     def _resolve_placeholder(self, placeholder: str) -> Any:
-        inner = placeholder.strip()[2:-2]  # remove ##
+        inner = placeholder.strip()[2:-2]  # remove ## or {{/}}
         parts = inner.split(".", 1)
         var_name = parts[0]
         if var_name not in self.outputs:
@@ -72,18 +72,34 @@ class StepContext:
     def _resolve_placeholder_deep(
         self, value: str, warnings: List[str]
     ) -> Any:
-        match = re.fullmatch(r"##([\w_]+)((?:\.[\w_]+)*)##", value.strip())
-        if not match:
-            return value
-        var_name, attr_path = match.group(1), match.group(2)
-        if var_name not in self.outputs:
-            warnings.append(
-                f"Variable '{var_name}' no encontrada. Usando literal."
-            )
-            return value
-        val = self.outputs[var_name]
-        parts = attr_path.strip(".").split(".") if attr_path else []
-        return self._dig(val, parts) if parts else val
+        raw = value.strip()
+        match = re.fullmatch(r"(?:##|\{\{)([\w_]+)((?:\.[\w_]+)*)(?:##|\}\})", raw)
+        if match:
+            var_name, attr_path = match.group(1), match.group(2)
+            if var_name not in self.outputs:
+                warnings.append(
+                    f"Variable '{var_name}' no encontrada. Usando literal."
+                )
+                return value
+            val = self.outputs[var_name]
+            parts = attr_path.strip(".").split(".") if attr_path else []
+            if parts:
+                return self._dig(val, parts)
+            if isinstance(val, dict) and "result" in val and isinstance(val["result"], str):
+                return val["result"]
+            return val
+
+        # Embedded placeholders within larger text → replace in-place
+        def _replacer(m: re.Match) -> str:
+            vname = m.group(1)
+            if vname not in self.outputs:
+                return m.group(0)
+            vval = self.outputs[vname]
+            if isinstance(vval, (dict, list)):
+                return json.dumps(vval, ensure_ascii=False)
+            return str(vval)
+
+        return re.sub(r"(?:##|\{\{)([\w_]+)(?:##|\}\})", _replacer, value)
 
     def _dig(self, obj: Any, path: str) -> Any:
         parts = path.split(".") if isinstance(path, str) else path

@@ -4,12 +4,114 @@ import random
 import re
 import time
 import traceback
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from cogniteam.config.settings import settings
 from cogniteam.core.context import StepContext
-from cogniteam.core.planner import generate_plan
+from cogniteam.core.planner import generate_plan_with_world_model
 from cogniteam.core.session import create_flow_session, get_session_service
+
+
+@dataclass
+class CalibrationEntry:
+    domain: str
+    archetype: str
+    predicted_confidence: float
+    actual_success: bool
+    brier_error: float = 0.0
+
+    def __post_init__(self):
+        outcome = 1.0 if self.actual_success else 0.0
+        self.brier_error = (self.predicted_confidence - outcome) ** 2
+
+
+class CalibrationStore:
+    """Tabla de calibración episódica (emulación de FC-RL Brier score).
+    Persistible en H-MEM / MATM / Fast-Slow de CogniTeam.
+    """
+
+    def __init__(self):
+        self._history: Dict[str, List[CalibrationEntry]] = defaultdict(list)
+
+    def _key(self, domain: str, archetype: str) -> str:
+        return f"{domain}.{archetype}"
+
+    def record(self, domain: str, archetype: str, predicted_confidence: float, actual_success: bool):
+        entry = CalibrationEntry(
+            domain=domain,
+            archetype=archetype,
+            predicted_confidence=predicted_confidence,
+            actual_success=actual_success,
+        )
+        self._history[self._key(domain, archetype)].append(entry)
+
+    def get_threshold(self, domain: str, archetype: str, default: float = 0.5) -> float:
+        """Calcula umbral dinámico basado en historial Brier."""
+        entries = self._history.get(self._key(domain, archetype), [])
+        if len(entries) < 5:
+            return default
+        brier_scores = [e.brier_error for e in entries[-20:]]
+        avg_brier = sum(brier_scores) / len(brier_scores)
+        adjustment = avg_brier * 0.5
+        return min(0.95, default + adjustment)
+
+    def get_report(self, domain: str, archetype: str) -> Dict[str, Any]:
+        entries = self._history.get(self._key(domain, archetype), [])
+        if not entries:
+            return {"count": 0}
+        briers = [e.brier_error for e in entries]
+        return {
+            "count": len(entries),
+            "successes": sum(1 for e in entries if e.actual_success),
+            "failures": sum(1 for e in entries if not e.actual_success),
+            "mean_brier": sum(briers) / len(briers),
+            "last_threshold": self.get_threshold(domain, archetype),
+        }
+
+    def to_dict(self) -> Dict[str, list]:
+        return {
+            key: [
+                {
+                    "domain": e.domain,
+                    "archetype": e.archetype,
+                    "predicted_confidence": e.predicted_confidence,
+                    "actual_success": e.actual_success,
+                }
+                for e in entries
+            ]
+            for key, entries in self._history.items()
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, list]) -> "CalibrationStore":
+        store = cls()
+        for key, entries in data.items():
+            for e in entries:
+                entry = CalibrationEntry(
+                    domain=e.get("domain", ""),
+                    archetype=e.get("archetype", ""),
+                    predicted_confidence=e.get("predicted_confidence", 0.5),
+                    actual_success=e.get("actual_success", False),
+                )
+                store._history[key].append(entry)
+        return store
+
+    def save(self, path: str):
+        import json, os
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls, path: str) -> "CalibrationStore":
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return cls.from_dict(data)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return cls()
 
 
 def _resolve_tool_name(raw_name: str, available: Dict[str, Callable]) -> Optional[str]:
@@ -36,7 +138,10 @@ def _validate_output(
         else:
             check = output.get("message") or ""
     elif isinstance(output, dict) and "result" in output:
-        check = output.get("result") or ""
+        if expected_format == "json":
+            check = output
+        else:
+            check = output.get("result") or ""
     elif isinstance(output, dict) and "success" in output:
         if output.get("success"):
             check = output.get("data") or output.get("message") or ""
@@ -128,6 +233,21 @@ def _get_memory_context(requirements: str) -> str:
     return ""
 
 
+def _get_artifacts_summary(outputs: Dict[str, Any]) -> str:
+    """Genera un resumen de artefactos para verificación de grounding."""
+    parts = []
+    for key, val in outputs.items():
+        if isinstance(val, dict):
+            content = str(val.get("result", val.get("data", val.get("message", ""))))
+        elif isinstance(val, str):
+            content = val
+        else:
+            content = str(val)
+        if content and len(content) > 20:
+            parts.append(f"{key}: {content[:300]}")
+    return "\n".join(parts[:5])
+
+
 async def run_orchestrated_flow(
     requirements: str,
     planner_agent,
@@ -137,6 +257,11 @@ async def run_orchestrated_flow(
     tools_description: str = "",
     agents_description: str = "",
     memory_enabled: bool = True,
+    domain: str = "",
+    archetype: str = "",
+    calibration_store: Optional[CalibrationStore] = None,
+    calibration_threshold: Optional[float] = None,
+    debugger_agent=None,
 ) -> Dict[str, Any]:
     print(f"\n{'='*60}")
     print(f"Iniciando flujo orquestado para: '{requirements[:100]}...'")
@@ -164,6 +289,9 @@ async def run_orchestrated_flow(
     flow_failed = False
     replan_count = 0
     failed_plan_summary = ""
+    world_model = None
+    grounding_result = None
+    execution_success = False
 
     while replan_count <= max_replanning:
         replan_context = None
@@ -173,14 +301,30 @@ async def run_orchestrated_flow(
                 replan_context = f"{replan_context}\n\nPlan anterior fallido:\n{failed_plan_summary}"
             print(f"\n[Re-planificación #{replan_count}]")
 
-        plan = await generate_plan(
+        plan_result = await generate_plan_with_world_model(
             planner_agent=planner_agent,
             requirements=requirements,
+            domain=domain,
+            archetype=archetype,
             session_id=session_id,
             replan_context=replan_context,
             tools_description=tools_description,
             agents_description=agents_description,
+            calibration_threshold=calibration_threshold,
         )
+
+        if plan_result.get("action") == "RECLARIFY":
+            print(f"  [World Model] {plan_result['reason']}")
+            return {
+                "status": "RECLARIFY",
+                "reason": plan_result["reason"],
+                "gaps": plan_result.get("gaps", []),
+                "world_model": plan_result.get("world_model"),
+                "elapsed": time.time() - start,
+            }
+
+        world_model = plan_result.get("world_model")
+        plan = plan_result.get("plan")
 
         if not plan or not isinstance(plan.get("steps"), list) or not plan["steps"]:
             print("  Plan no generado o vacío.")
@@ -298,10 +442,57 @@ async def run_orchestrated_flow(
             flow_failed = False
             continue
         elif flow_failed:
+            execution_success = False
             break
         else:
             print(f"\nPlan completado exitosamente.")
+            execution_success = True
             break
+
+    # --- GROUNDING VERIFICATION (Debugger) ---
+    if execution_success and world_model and world_model.get("keywords"):
+        artifacts = _get_artifacts_summary(ctx.outputs)
+        if debugger_agent is not None and hasattr(debugger_agent, "verify_grounding"):
+            try:
+                grounding_result = debugger_agent.verify_grounding(
+                    world_model["keywords"], artifacts
+                )
+            except Exception:
+                from cogniteam.agents.debugger_agent import verify_grounding
+                grounding_result = verify_grounding(world_model["keywords"], artifacts)
+        else:
+            from cogniteam.agents.debugger_agent import verify_grounding
+            grounding_result = verify_grounding(world_model["keywords"], artifacts)
+
+        if grounding_result:
+            gs = grounding_result.get("grounding_score", 0)
+            print(f"\n[Grounding] Score: {gs:.2f} | Encontradas: {grounding_result.get('found_keywords', [])}")
+            if gs < 0.6:
+                print(f"  [Grounding] Keywords faltantes: {grounding_result.get('missing_keywords', [])}")
+                print(f"  [Grounding] Acción correctiva: {grounding_result.get('corrective_action', 'N/A')}")
+
+    # --- POST-EXECUTION FILE VALIDATION ---
+    if execution_success and world_model and world_model.get("keywords"):
+        import os
+        file_keywords = [kw for kw in world_model["keywords"] if "." in kw]
+        if file_keywords:
+            missing = []
+            for fname in file_keywords:
+                fpath = os.path.join(settings.project_root, fname)
+                if not os.path.isfile(fpath):
+                    missing.append(fname)
+            if missing:
+                print(f"\n[Validación Post-Ejecución] Archivos esperados NO encontrados: {missing}")
+                print(f"  El plan reportó éxito pero estos archivos no existen en disco.")
+            else:
+                print(f"\n[Validación Post-Ejecución] Archivos verificados en disco: {file_keywords} ✅")
+
+    # --- CALIBRATION (FC-RL emulado) ---
+    if calibration_store is not None and domain and archetype and world_model:
+        pred_conf = world_model.get("confidence", 50) / 100.0
+        calibration_store.record(domain, archetype, pred_conf, execution_success)
+        new_threshold = calibration_store.get_threshold(domain, archetype)
+        print(f"\n[Calibración] {domain}.{archetype} | Confianza: {pred_conf:.2f} | Éxito: {execution_success} | Umbral: {new_threshold:.2f}")
 
     # Save memory state
     if memory_enabled:
@@ -319,13 +510,19 @@ async def run_orchestrated_flow(
     print(f"Tiempo total: {elapsed:.2f}s")
     print(f"{'='*60}")
 
-    return {
+    result = {
         "success": not flow_failed,
         "elapsed": elapsed,
         "steps": steps,
         "plan_summary": "\n".join(plan_summary_parts) if plan_summary_parts else "",
         "outputs": dict(ctx.outputs) if hasattr(ctx, "outputs") else {},
+        "world_model": world_model,
+        "grounding": grounding_result,
     }
+    if not flow_failed and domain and archetype:
+        result["domain"] = domain
+        result["archetype"] = archetype
+    return result
 
 
 def _store_in_memory(tool_name: str, var_name: str, result: Any, requirements: str):

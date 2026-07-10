@@ -8,6 +8,7 @@ version = "1.0.0"
 description = "Sistema multi-agente con memoria híbrida H-MEM, GraphRAG, MATM y aprendizaje continuo"
 requires-python = ">=3.11"
 dependencies = [
+    "traceforge>=0.1.0",
     "groq>=1.5.0",
     "httpx>=0.28.0",
     "networkx>=3.0",

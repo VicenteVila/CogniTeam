@@ -29,6 +29,33 @@ def browse_web_page(url: str) -> Dict[str, str]:
             encoding = "utf-8"
         response.encoding = encoding
         soup = BeautifulSoup(response.text, "html.parser")
+
+        is_arxiv = "arxiv.org" in url.lower()
+        if is_arxiv:
+            for selector in [
+                "script", "style", "nav", "footer", "header", "aside",
+                "form", "button", "input", "select", "textarea", "iframe",
+                "noscript", "svg", "path", "#sidebar", ".sidebar",
+                ".extra-services", "#references", "#comments",
+            ]:
+                for el in soup.select(selector):
+                    el.decompose()
+            parts = []
+            title_el = soup.find("h1", class_=re.compile(r"title", re.I))
+            if title_el:
+                parts.append("TITLE: " + _clean_latex(title_el.get_text(strip=True)))
+            authors_el = soup.find("div", class_=re.compile(r"authors", re.I))
+            if authors_el:
+                parts.append("AUTHORS: " + _clean_latex(authors_el.get_text(strip=True)))
+            abstract_el = soup.find("blockquote", class_=re.compile(r"abstract", re.I))
+            if not abstract_el:
+                abstract_el = soup.find("div", class_=re.compile(r"abstract", re.I))
+            if abstract_el:
+                parts.append("ABSTRACT: " + _clean_latex(abstract_el.get_text(strip=True)))
+            if parts:
+                return {"result": "\n\n".join(parts)}
+            print("  [arXiv] No se encontraron elementos específicos, usando extracción genérica.")
+
         for selector in [
             "script", "style", "nav", "footer", "header", "aside",
             "form", "button", "input", "select", "textarea", "iframe",
@@ -51,8 +78,9 @@ def browse_web_page(url: str) -> Dict[str, str]:
         cleaned = []
         for line in lines:
             line = re.sub(r"\s{3,}", "  ", line)
+            line = _clean_latex(line)
             if len(line) < 20 and not re.search(r"[.!?:]$", line) and not re.match(r"^(#+\s|\*\s|- )", line):
-                if cleaned and len(cleaned[-1]) > 80:
+                if cleaned and len(cleaned[-1]) > 80 and not re.match(r"^[A-Z\"'(]", line):
                     continue
             cleaned.append(line)
         cleaned_text = "\n".join(cleaned)
@@ -68,3 +96,15 @@ def browse_web_page(url: str) -> Dict[str, str]:
     except Exception as e:
         print(f"ERROR en browse_web_page: {e}")
         return {"result": f"Error procesando URL '{url}': {e}"}
+
+
+def _clean_latex(text: str) -> str:
+    """Limpia delimitadores LaTeX comunes que quedan tras el parseo HTML."""
+    text = re.sub(r"\\\(|\\\)", "", text)
+    text = re.sub(r"\\\[|\\\]", "", text)
+    text = re.sub(r"\$\$", "", text)
+    text = re.sub(r"\\text\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"\\emph\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"\\textbf\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"\\textit\{([^}]*)\}", r"\1", text)
+    return text.strip()
