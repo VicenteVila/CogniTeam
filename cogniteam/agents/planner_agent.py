@@ -941,12 +941,16 @@ def generate_world_model(
 # --- Few-shot examples por dominio ---
 # Cada entrada es el ejemplo que se inyecta en PLANNER_INSTRUCTION_TEMPLATE.
 # Solo se muestra UN ejemplo por ejecución (el del dominio actual).
-FEWSHOT_UI = """EJEMPLO (UI/Landing Page):
+FEWSHOT_UI = """EJEMPLO (UI + Contenido — landing page enlazada a blog.md):
 {"steps":[
-  {"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML principal de la landing page", "tool_to_use":"generate_ui_code", "inputs":{"description":"Landing page moderna con navbar, hero, galería y contacto"}, "output_variable_name":"html_code", "expected_output_format":"html"},
-  {"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS para la landing page", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS oscuro con acentos dorados"}, "output_variable_name":"css_code", "expected_output_format":"css"},
-  {"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar JS para la landing page", "tool_to_use":"generate_js_code", "inputs":{"description":"JS para smooth scroll y formulario de contacto"}, "output_variable_name":"js_code", "expected_output_format":"javascript"},
-  {"step":4, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en un unico index.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"index.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
+  {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Buscar URLs de papers recientes", "tool_to_use":"web_search_real", "inputs":{"query":"tres papers mas recientes sobre el tema solicitado", "num_results":5}, "output_variable_name":"urls_encontradas", "expected_output_format":"json"},
+  {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Navegar cada URL para obtener detalles completos de cada paper", "tool_to_use":"browse_web_page", "inputs":{"url":"{{urls_encontradas}}"}, "output_variable_name":"detalle_completo", "expected_output_format":"text"},
+  {"step":3, "agent":"DeveloperAgent_CogniTeam", "action_description":"Extraer info estructurada: titulo, autor, resumen por cada paper", "tool_to_use":"extract_info_from_text", "inputs":{"text_content":"{{detalle_completo}}", "question_or_instruction":"Extrae titulo, autor, resumen y fecha de cada paper. Devuelve una lista por paper."}, "output_variable_name":"papers_estructurados", "expected_output_format":"text"},
+  {"step":4, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar blog.md con un articulo por paper, cada uno con anchor HTML <a name='paper-1'></a>, <a name='paper-2'></a>", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Blog en markdown con {{papers_estructurados}}. Cada paper es una seccion con anchor HTML (<a name='paper-N'></a>) para enlace directo desde el HTML"}, "output_variable_name":"blog_content", "expected_output_format":"text"},
+  {"step":5, "agent":"DeveloperAgent_CogniTeam", "action_description":"Persistir blog.md a disco", "tool_to_use":"write_file_sandboxed", "inputs":{"relative_filepath":"blog.md", "content":"{{blog_content}}"}, "output_variable_name":"blog_file", "expected_output_format":"text"},
+  {"step":6, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML con tarjetas de cada paper y links a blog.md#paper-1, blog.md#paper-2, blog.md#paper-3", "tool_to_use":"generate_ui_code", "inputs":{"description":"Landing page moderna. Datos de los papers: {{papers_estructurados}}. Cada tarjeta enlaza a blog.md#paper-N para el detalle completo"}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":7, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS moderno responsive"}, "output_variable_name":"css_code", "expected_output_format":"css"},
+  {"step":8, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en index.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"index.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
 ]}"""
 
 FEWSHOT_SCRIPT = """EJEMPLO (Scripting — cadena genera→escribe→ejecuta→verifica):
@@ -994,6 +998,8 @@ REGLAS:
 10. generate_textual_artifact genera contenido SOLO EN MEMORIA. Siempre usa write_file_sandboxed despues para persistirlo a disco.
 11. Para tareas que requieran ejecutar scripts, la cadena completa es: generate_textual_artifact (crear) → write_file_sandboxed (persistir) → execute_terminal_command_safe (ejecutar) → list_files_sandboxed (verificar output).
 12. IMPORTANTE: Encadena datos entre pasos usando {{{{output_variable_name}}}} en los inputs. Si el paso 2 extrae informacion (ej: {{{{paper_info}}}}), pasala al paso 3 como "description": "Landing page con: {{{{paper_info}}}}". NO generes contenido vacio o placeholder — los datos fluyen mediante referencias.
+13. Para tareas que requieran extraer datos de sitios web: usa web_search_real para encontrar URLs, luego browse_web_page en CADA URL individual para obtener el contenido completo, y extract_info_from_text sobre el resultado de browse_web_page para estructurarlo.
+14. SI generas MULTIPLES artefactos (ej: index.html y blog.md), ENLAZALOS entre si: el HTML debe tener links <a href=\"blog.md#articulo-1\"> a las secciones del .md, y el .md debe tener anchors HTML (<a name=\"articulo-1\">) en cada seccion para que los links funcionen.
 
 {fewshot_example}
 
