@@ -422,13 +422,17 @@ async def main():
     )
 
     # ── Generar reporte TraceForge ──
+    # NOTA: traceforge.report() es UNA FUNCION en __init__.py pero hace
+    # from .report import generate_report internamente, lo que SOBRESCRIBE
+    # traceforge.report con el submodulo. Guardamos referencia antes.
+    _tf_report = traceforge.report
     try:
         trace_id = traceforge.get_last_trace_id()
         if trace_id:
             report_dir = Path(settings.project_root) / "proyectos_finalizados" / f"RUN_{_timestamp}"
             report_dir.mkdir(parents=True, exist_ok=True)
-            traceforge.report(trace_id, format="html", output=str(report_dir / "traceforge_report.html"))
-            traceforge.report(trace_id, format="markdown", output=str(report_dir / "traceforge_report.md"))
+            _tf_report(trace_id, format="html", output=str(report_dir / "traceforge_report.html"))
+            _tf_report(trace_id, format="markdown", output=str(report_dir / "traceforge_report.md"))
             print(f"  TraceForge reportes generados en {report_dir}/")
     except Exception as e:
         print(f"  TraceForge report error: {e}")
