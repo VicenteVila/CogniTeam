@@ -412,7 +412,7 @@ def generate_world_model(
             f"generate_textual_artifact + write_file_sandboxed pueden crearlo. "
             f"NO marques como gap algo que estas herramientas pueden resolver."
         )
-    raw = llm_complete(prompt=prompt, task="world_model", max_tokens=1024, temperature=0.3, timeout_seconds=120)
+    raw = llm_complete(prompt=prompt, task="world_model", max_tokens=2048, temperature=0.3, timeout_seconds=120)
     if not raw:
         print("  [World Model] No se obtuvo respuesta del LLM.")
         return None
@@ -575,6 +575,10 @@ def _extract_json(raw: str) -> Optional[Dict[str, Any]]:
         raw = raw[3:].strip()
     if raw.endswith("```"):
         raw = raw[:-len("```")].strip()
+
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if match:
+        raw = match.group()
 
     decoder = json.JSONDecoder()
     idx = 0
