@@ -4,7 +4,18 @@ import time
 from typing import Any, Dict, List, Optional, Union
 
 import traceforge
-from PIL import Image
+
+# Último proveedor/modelo que respondió (para diagnóstico)
+_last_provider: str = ""
+_last_model: str = ""
+
+
+def get_last_provider() -> str:
+    return _last_provider
+
+
+def get_last_model() -> str:
+    return _last_model
 
 from cogniteam.config.settings import settings
 from cogniteam.tools.utils.ratelimit import (
@@ -223,7 +234,7 @@ def _mistral_available() -> bool:
 
 
 def _mistral_model(task: str) -> str:
-    if task == "code":
+    if task in ("code", "grounding"):
         return settings.mistral_model_code
     if task in ("reasoning", "planning", "world_model"):
         return settings.mistral_model_reasoning
@@ -328,9 +339,9 @@ def _get_primary_provider(task: str) -> Optional[str]:
     routing = {
         "world_model": "nvidia",
         "reasoning": "nvidia",
-        # planning → Groq (llama-3.3-70b es mejor con JSON estructurado)
+        "planning": "mistral",
         "code": "mistral",
-        "grounding": "cerebras",
+        "grounding": "mistral",
         "extract": "cerebras",
         "fast": "cerebras",
         "memory": "cerebras",
@@ -390,9 +401,11 @@ def _llm_complete_body(
     timeout_seconds: int = 180,
 ) -> Optional[str]:
     """Inner body of llm_complete (routing logic, no tracing)."""
+    global _last_provider, _last_model
     import time as _time
 
     def _try_provider(provider: str, label: str, fn: callable, model: str) -> Optional[str]:
+        global _last_provider, _last_model
         print(f"  >> LLM ({label}): {model}, prompt={len(prompt)}c, max_tokens={max_tokens}")
         result = fn(
             model_name=model,
@@ -402,6 +415,8 @@ def _llm_complete_body(
             timeout_seconds=timeout_seconds,
         )
         if result:
+            _last_provider = provider
+            _last_model = model
             record_success(provider)
             record_request(provider)
             return result
@@ -440,6 +455,8 @@ def _llm_complete_body(
             timeout_seconds=timeout_seconds,
         )
         if result:
+            _last_provider = "groq"
+            _last_model = groq_model
             record_success("groq")
             _record_groq()
             return result
@@ -449,21 +466,25 @@ def _llm_complete_body(
     # Fallback: Ollama
     if settings.use_ollama and settings.ollama_base_url:
         raw_model = get_model_for_task(task).replace("ollama/", "")
-        print(f"  >> LLM: {raw_model}, prompt={len(prompt)}c, max_tokens={max_tokens}, timeout={timeout_seconds}s")
-        return _ollama_complete(
+        print(f"  >> LLM (Ollama): {raw_model}, prompt={len(prompt)}c, max_tokens={max_tokens}, timeout={timeout_seconds}s")
+        result = _ollama_complete(
             model_name=raw_model,
             prompt=prompt,
             max_tokens=max_tokens,
             temperature=temperature,
             timeout_seconds=timeout_seconds,
         )
+        if result:
+            _last_provider = "ollama"
+            _last_model = raw_model
+            return result
 
     # Fallback: litellm (legacy)
     import litellm
 
     model = get_model_for_task(task)
     display_model = model.replace("ollama/", "")
-    print(f"  >> LLM: {display_model}, prompt={len(prompt)}c, max_tokens={max_tokens}, timeout={timeout_seconds}s")
+    print(f"  >> LLM (litellm): {display_model}, prompt={len(prompt)}c, max_tokens={max_tokens}, timeout={timeout_seconds}s")
     t0 = _time.time()
 
     kwargs = dict(
@@ -480,6 +501,8 @@ def _llm_complete_body(
         elapsed = _time.time() - t0
         if response and response.choices and response.choices[0].message:
             content = response.choices[0].message.content or ""
+            _last_provider = "litellm"
+            _last_model = model
             print(f"  << LLM respuesta en {elapsed:.1f}s ({len(content)}c)")
             return content.strip() or None
         print(f"  << LLM respuesta vacía en {elapsed:.1f}s")

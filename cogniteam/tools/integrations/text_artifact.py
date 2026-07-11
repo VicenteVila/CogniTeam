@@ -42,12 +42,10 @@ def generate_textual_artifact(
         raw = llm_complete("".join(prompt_parts), task="reasoning", max_tokens=3000, timeout_seconds=120)
         if raw:
             text = raw.strip()
-            desc = description_of_artifact.lower()
-            if "solo el bloque de código python" in desc or "only the python code" in desc:
-                if "```python" in text:
-                    m = re.search(r"```python\s*([\s\S]*?)\s*```", text, re.DOTALL)
-                    if m:
-                        text = m.group(1).strip()
+            # Auto-extraer bloque de código si la salida contiene uno
+            code_block = re.search(r"```(?:\w+)?\s*\n([\s\S]*?)```", text, re.DOTALL)
+            if code_block:
+                text = code_block.group(1).strip()
             return {"result": text}
         return {"result": "Error: respuesta vacía del LLM."}
     except Exception as e:

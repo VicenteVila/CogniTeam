@@ -1,56 +1,44 @@
 # CogniTeam 🤖
 
+[![Test](https://github.com/VicenteVila/CogniTeam/actions/workflows/test.yml/badge.svg)](https://github.com/VicenteVila/CogniTeam/actions/workflows/test.yml)
+
 **Sistema multi-agente autónomo** con scoping inteligente de tareas, modelo de mundo, planificación dinámica, ejecución orquestada y trazabilidad completa de llamadas LLM.
 
-Arquitectura basada en agentes especializados que colaboran secuencialmente para completar tareas complejas en 13 dominios, desde Data Science hasta Desarrollo Web, pasando por Content Writing, Game Development y Cybersecurity.
+Arquitectura basada en agentes especializados que colaboran secuencialmente para completar tareas complejas en 5+ dominios, desde Web Development hasta Game Development, con soporte experimental para 8 dominios adicionales.
+
+## Product Story
+
+CogniTeam es un framework de agentes LLM que **planifica, ejecuta y valida** tareas
+complejas de forma autónoma.  A diferencia de chatbots o chains lineales, CogniTeam
+tiene un modelo de mundo que evalúa qué información falta antes de planificar, un
+planificador que selecciona few‑shots por dominio, y un orquestador con replanning
+y grounding semántico que verifica que los entregables coincidan con lo prometido.
+
+Está diseñado para brillar en **generación de UI, scripting, educación, diseño
+gráfico y game‑dev**, donde la validación funcional (Playwright headless, tests de
+integración) es tan importante como la generación misma.
 
 ---
+
 
 ## Flujo agentico completo
 
 Cada tarea atraviesa 5 fases orquestadas:
 
-```
-  Usuario
-     │
-     ▼
-┌──────────────────────┐
-│  1. Scoping Agent    │  Clasifica dominio + arquetipo, pregunta hasta clarificar
-│  (clasificación +    │  Presenta dominios seleccionados y permite modificarlos
-│   clarificación)     │
-└──────┬───────────────┘
-       │ TaskManifest (tarea clarificada)
-       ▼
-┌──────────────────────┐
-│  2. World Model      │  Evalúa: qué falta, qué herramientas pueden resolverlo,
-│  (evaluación)        │  confianza, riesgos, keywords de dominio
-└──────┬───────────────┘
-       │ Constraints + Keywords
-       ▼
-┌──────────────────────┐
-│  3. Planner Agent    │  Genera plan multi-paso (JSON) con referencias {{var}}
-│  (few-shot por       │  entre pasos. El ejemplo few-shot se selecciona según
-│   dominio)           │  el dominio detectado
-└──────┬───────────────┘
-       │ Plan JSON (lista de pasos)
-       ▼
-┌────────────────────────────────────────────┐
-│  4. Orchestrator + Agentes de ejecución    │
-│                                            │
-│  ┌──────────┐  ┌───────────┐  ┌─────────┐  │
-│  │Developer │  │UI Designer│  │Debugger │  │
-│  │ Agent    │  │ Agent     │  │ Agent   │  │
-│  └──────────┘  └───────────┘  └─────────┘  │
-│                                            │
-│  Por cada paso: resuelve {{var}}, ejecuta   │
-│  tool, almacena output, detecta errores     │
-└──────────────────┬─────────────────────────┘
-                   │ Artefactos generados
-                   ▼
-┌──────────────────────┐
-│  5. Post-ejecución   │  TraceForge report, _save_result (mueve artefactos a
-│  (reporte + guardado)│  proyectos_finalizados/RUN_*), reporte.md
-└──────────────────────┘
+```mermaid
+flowchart TD
+    U(("User"))
+    U -->|Task| S["1. Scoping Agent<br/>classification + clarification"]
+    S -->|TaskManifest| W["2. World Model<br/>gaps + confidence + grounding"]
+    W -->|Constraints + Keywords| P["3. Planner Agent<br/>few-shot plan per domain"]
+    P -->|Plan JSON| O["4. Orchestrator<br/>resolves vars, routes to agents,<br/>executes steps, validates outputs"]
+    O --> R["5. Post-execution<br/>TraceForge report + save artifacts"]
+    O -.-> DA["Developer Agent"]
+    O -.-> UA["UI Designer Agent"]
+    O -.-> DBA["Debugger Agent"]
+    DA -.->|results| O
+    UA -.->|results| O
+    DBA -.->|results| O
 ```
 
 ### 1. Scoping Agent
@@ -82,7 +70,7 @@ Si el World Model detecta un gap irresoluble, el sistema puede solicitar más in
 El **Planner Agent** genera un plan JSON con pasos secuenciales:
 
 1. Recibe la tarea clarificada y el contexto del World Model
-2. Selecciona el **few-shot example** según el dominio detectado (3 plantillas: UI, Scripting, Content)
+2. Selecciona el **few-shot example** según el dominio detectado (5 plantillas: UI, Scripting, Education, Graphic Design, Game Dev)
 3. Genera una lista de pasos con:
    - `tool_to_use`: herramienta específica del sistema
    - `inputs`: parámetros exactos de la tool, con referencias `{{output_variable}}` a pasos anteriores
@@ -136,27 +124,32 @@ Al finalizar la ejecución se generan:
 
 ---
 
-## Dominios probados y estado de validación
+## Dominios
 
-### Completados (flujo agentico exitoso)
+### Soportados (con few‑shot + world model dedicados)
 
-| Dominio | Tarea de prueba | Pasos | Duración | Resultado |
-|---------|-----------------|-------|----------|-----------|
-| **9. Data Science** | Analizar `ventas.csv`, calcular total por categoría, generar gráfico de barras | 6 | 135.6s | ✅ Plan generado, script Python creado y ejecutado, gráfico `resultado.png` generado |
-| **1. Web Development** | Landing page moderna con navbar, hero, galería y contacto | 9 | 238.2s | ✅ HTML/CSS/JS generados, combinados en `index.html`, archivos persistidos |
-| **1. Web Development + 10. Content Writing** | Blog con 3 papers de arXiv sobre IA (index.html + blog.md) | 8-9 | 96-172s | 🔧 Plan generado y ejecutado, requiere ajuste fino en encadenamiento de datos extraídos |
-| **Extract + UI + Content** | Extraer datos de arXiv y generar landing page + blog | 8 | 171.7s | 🔧 Plan ejecuta correctamente, pendiente verificar contenido post-fix de llaves |
+| Dominio | Few‑Shot | World Model | Arquetipos |
+|---------|----------|-------------|------------|
+| **1. Web Development** | `FEWSHOT_UI` | Sí | landing‑page, ecommerce, saas‑dashboard, blog‑content, portfolio‑creative, corporate‑business |
+| **2. Software Development** | `FEWSHOT_SCRIPT` | Sí | mobile‑apps, backend‑apis, databases, devops‑infra, machine‑learning |
+| **3. Education** | `FEWSHOT_EDUCATION` | Sí | bootcamps, moocs, certifications, corporate‑training, k12‑curriculum |
+| **4. Graphic Design** | `FEWSHOT_GRAPHIC_DESIGN` | Sí | branding‑identity, editorial‑layout, ui‑ux‑prototyping |
+| **8. Game Development** | `FEWSHOT_GAME_DEV` | Sí | mobile‑casual, pc‑console, multiplayer‑online, vr‑ar, game‑tools |
 
-### Próximos dominios a validar
+### Experimentales (fallback genérico, sin instrumentación dedicada)
 
-| Dominio | Prioridad | Riesgo estimado |
-|---------|-----------|-----------------|
-| **2. Software Development** | Alta | Bajo — los pasos son scripting estándar (gen → write → exec) |
-| **8. Game Development** | Alta | Medio — requiere generación de assets + lógica de juego |
-| **10. Content Writing** | Alta | Bajo — pocos pasos, generación de texto + persistencia |
-| **11. DevOps** | Media | Medio — comandos shell, validación de scripts |
-| **12. Cybersecurity** | Baja | Alto — requiere permisos específicos, herramientas externas |
-| **13. Legal** | Baja | Bajo — generación de documentos + persistencia |
+| # | Dominio |
+|---|---------|
+| 5 | Data Science |
+| 6 | Content Writing |
+| 7 | DevOps |
+| 9 | Cybersecurity |
+| 10 | Legal & Compliance |
+| 11 | Architecture & Spatial |
+| 12 | Marketing & Growth |
+| 13 | Audiovisual & Management |
+
+> Ver [docs/domain_consolidation.md](docs/domain_consolidation.md) para el detalle de la consolidación y criterios de promoción. 
 
 ---
 
@@ -254,8 +247,8 @@ proyectos_finalizados/
 | **LLM Providers** | Groq SDK, Ollama API, litellm, OpenAI-compatible (NVIDIA, Mistral, Cerebras) |
 | **Rate Limiting** | Circuit breaker con fallback automático entre providers (14.400 req/día Groq → Ollama local) |
 | **Orquestación** | StepContext con resolución de variables `{{var}}`, soporte dot-path y embebido en texto |
-| **Planificación** | Few-shot por dominio (3 plantillas: UI, Scripting, Content), modelo de mundo para detección de gaps |
-| **Scoping** | Clasificación multi-arquetipo con 55 arquetipos en 13 dominios, clarificación interactiva |
+| **Planificación** | Few-shot por dominio (5 plantillas: UI, Scripting, Education, Graphic Design, Game Dev), modelo de mundo para detección de gaps |
+| **Scoping** | Clasificación multi-arquetipo con 55 arquetipos en 5+ dominios, clarificación interactiva |
 | **Trazabilidad** | TraceForge — span capture por llamada LLM con modelo, tokens, latencia y errores |
 | **Seguridad** | Sandboxing de rutas (no permite rutas absolutas fuera del proyecto), hidden tools, confirmación de comandos |
 | **Tests** | pytest + asyncio |

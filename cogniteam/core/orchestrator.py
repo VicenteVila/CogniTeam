@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import random
 import re
 import time
@@ -7,6 +8,8 @@ import traceback
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
+
+import traceforge
 
 from cogniteam.config.settings import settings
 from cogniteam.core.context import StepContext
@@ -48,12 +51,25 @@ class CalibrationStore:
         self._history[self._key(domain, archetype)].append(entry)
 
     def get_threshold(self, domain: str, archetype: str, default: float = 0.5) -> float:
-        """Calcula umbral dinámico basado en historial Brier."""
+        """Calcula umbral dinámico basado en historial Brier con decaimiento.
+
+        - Si hay pocas muestras (<5): retorna default.
+        - Si el Brier promedio reciente es alto (mala calibración): sube el umbral.
+        - Si el Brier reciente es bajo (buena calibración) y hay éxitos recientes:
+          el umbral decae gradualmente hacia default para permitir recuperación.
+        """
         entries = self._history.get(self._key(domain, archetype), [])
         if len(entries) < 5:
             return default
-        brier_scores = [e.brier_error for e in entries[-20:]]
+        recent = entries[-10:]
+        brier_scores = [e.brier_error for e in recent]
         avg_brier = sum(brier_scores) / len(brier_scores)
+        recent_successes = sum(1 for e in recent if e.actual_success)
+        success_rate = recent_successes / len(recent) if recent else 0
+
+        if avg_brier < 0.15 and success_rate > 0.7:
+            decay = max(0, (default - avg_brier) * 0.3)
+            return max(default, default + decay)
         adjustment = avg_brier * 0.5
         return min(0.95, default + adjustment)
 
@@ -117,7 +133,7 @@ class CalibrationStore:
 def _resolve_tool_name(raw_name: str, available: Dict[str, Callable]) -> Optional[str]:
     if raw_name in available:
         return raw_name
-    m = re.match(r"^(\w+)", raw_name)
+    m = re.match(r"^([\w-]+)", raw_name)
     if m and m.group(1) in available:
         return m.group(1)
     return None
@@ -144,7 +160,8 @@ def _validate_output(
         if expected_format == "tool_response_dict":
             return True
         if output.get("success"):
-            check = output.get("data") or output.get("message") or ""
+            data_val = output.get("data")
+            check = data_val if isinstance(data_val, str) else output.get("message", "")
         else:
             check = output.get("message") or ""
     elif isinstance(output, dict) and "result" in output:
@@ -154,7 +171,8 @@ def _validate_output(
             check = output.get("result") or ""
     elif isinstance(output, dict) and "success" in output:
         if output.get("success"):
-            check = output.get("data") or output.get("message") or ""
+            data_val = output.get("data")
+            check = data_val if isinstance(data_val, str) else output.get("message", "")
 
     valid = False
     if expected_format == "html":
@@ -253,6 +271,50 @@ def _get_artifacts_summary(outputs: Dict[str, Any]) -> str:
     return "\n".join(parts[:5])
 
 
+def _run_functional_validation(project_root: str, ctx) -> None:
+    """Busca archivos .html generados y ejecuta validate_html_functional en cada uno.
+
+    Safety-net post-ejecución — solo reporta, no modifica el flujo.
+    """
+    import os
+
+    from cogniteam.tools.ui.validate import validate_html_functional
+
+    html_files = sorted(
+        f for f in os.listdir(project_root)
+        if f.endswith(".html") and os.path.isfile(os.path.join(project_root, f))
+    )
+    if not html_files:
+        return
+
+    print(f"\n--- Validación funcional (Playwright) ---")
+    all_passed = True
+    for fname in html_files:
+        result = validate_html_functional(
+            filepath=fname,
+            capture_screenshot=True,
+            timeout_seconds=15,
+        )
+        if result.get("passed"):
+            print(f"  ✅ {fname}: {result.get('data', 'OK')}")
+        else:
+            all_passed = False
+            errors = result.get("console_errors", [])
+            print(f"  ❌ {fname}: {result.get('data', 'FAIL')}")
+            for err in errors[:5]:
+                print(f"     {err}")
+            if result.get("screenshot_path"):
+                print(f"     Screenshot: {result['screenshot_path']}")
+
+    ctx.outputs["functional_validation_passed"] = all_passed
+    ctx.outputs["functional_validation_summary"] = (
+        "Todos los HTML pasaron validación funcional" if all_passed
+        else "Algunos HTML fallaron validación funcional"
+    )
+    print(f"  {'✅' if all_passed else '⚠'} Validación funcional: "
+          f"{'todos los HTML pasaron' if all_passed else 'algunos HTML fallaron'}")
+
+
 async def run_orchestrated_flow(
     requirements: str,
     planner_agent,
@@ -284,11 +346,15 @@ async def run_orchestrated_flow(
                 f"--- Memory Context (use as reference) ---\n{memory_context}"
             )
 
+    original_requirements = requirements
+
     start = time.time()
     flow_id = f"{int(start)}_{random.randint(1000, 9999)}"
     session_id = create_flow_session(flow_id)
+    artifacts_dir = os.path.join(settings.project_root, ".cogniteam", "artifacts", flow_id)
+    os.makedirs(artifacts_dir, exist_ok=True)
+    print(f"  Directorio de artefactos: {artifacts_dir}")
     ctx = StepContext(requirements)
-    original_requirements = requirements
 
     steps: List[Dict[str, Any]] = []
     flow_failed = False
@@ -317,6 +383,10 @@ async def run_orchestrated_flow(
             agents_description=agents_description,
             calibration_threshold=calibration_threshold,
         )
+
+        wm_status = plan_result.get("wm_status", "unknown")
+        if wm_status == "failed":
+            print(f"  [World Model] FALLÓ la generación. Planner procede sin simulación prospectiva.")
 
         if plan_result.get("action") == "RECLARIFY":
             print(f"  [World Model] {plan_result['reason']}")
@@ -380,49 +450,77 @@ async def run_orchestrated_flow(
 
             resolved = _resolve_tool_name(tool_name, tool_functions_map or {}) if tool_name else None
             if resolved and resolved != "AgentLogic":
-                processed, warnings = ctx.resolve_inputs(raw_inputs)
-                if warnings:
-                    print(f"  Advertencias: {', '.join(warnings)}")
+                with traceforge.span(agent="developer.execute_step", model=tool_name, tags=["execution", tool_name or "unknown"]) as _sp:
+                    processed, warnings = ctx.resolve_inputs(raw_inputs)
+                    if warnings:
+                        print(f"  Advertencias: {', '.join(warnings)}")
 
-                try:
-                    fn = tool_functions_map[resolved]
-                    if asyncio.iscoroutinefunction(fn):
-                        result = await fn(**processed)
+                    if resolved in ("write_file_sandboxed", "read_file_sandboxed", "list_files_sandboxed", "delete_file_sandboxed"):
+                        orig_path = processed.get("relative_filepath", processed.get("relative_dirpath", ""))
+                        if orig_path and not orig_path.startswith(".") and not orig_path.startswith("/"):
+                            if resolved == "write_file_sandboxed":
+                                processed["relative_filepath"] = os.path.relpath(
+                                    os.path.join(artifacts_dir, orig_path),
+                                    settings.project_root,
+                                )
+                            elif resolved == "read_file_sandboxed":
+                                processed["relative_filepath"] = os.path.relpath(
+                                    os.path.join(artifacts_dir, orig_path),
+                                    settings.project_root,
+                                )
+                            elif resolved == "delete_file_sandboxed":
+                                processed["relative_filepath"] = os.path.relpath(
+                                    os.path.join(artifacts_dir, orig_path),
+                                    settings.project_root,
+                                )
+                    elif resolved in ("combine_ui_to_html", "validate_html_functional"):
+                        orig_path = processed.get("filepath", "")
+                        if orig_path and not orig_path.startswith(".") and not orig_path.startswith("/"):
+                            processed["filepath"] = os.path.relpath(
+                                os.path.join(artifacts_dir, orig_path),
+                                settings.project_root,
+                            )
+
+                    try:
+                        fn = tool_functions_map[resolved]
+                        if asyncio.iscoroutinefunction(fn):
+                            result = await fn(**processed)
+                        else:
+                            result = fn(**processed)
+                    except Exception as e:
+                        print(f"  ERROR ejecutando '{resolved}': {e}")
+                        traceback.print_exc()
+                        result = {
+                            "success": False,
+                            "message": f"Excepción: {e}",
+                            "data": None,
+                        }
+
+                    if isinstance(result, dict) and result.get("success") is False:
+                        err_msg = result.get('message', 'error desconocido')
+                        print(f"  Fallo explícito: {err_msg}")
+                        ctx.store(var_name, result, "failed_explicit")
+                        step_ok = False
+                        failed_step_detail = f"Paso {step_num}: {resolved} falló con: {err_msg}"
+                    elif expected_fmt and not _validate_output(
+                        result, expected_fmt, tool_name
+                    ):
+                        print(f"  Fallo de formato (esperado: {expected_fmt})")
+                        ctx.store(var_name, result, "format_mismatch")
+                        step_ok = False
+                        failed_step_detail = f"Paso {step_num}: {resolved} devolvió formato incorrecto (esperado: {expected_fmt})"
                     else:
-                        result = fn(**processed)
-                except Exception as e:
-                    print(f"  ERROR ejecutando '{resolved}': {e}")
-                    traceback.print_exc()
-                    result = {
-                        "success": False,
-                        "message": f"Excepción: {e}",
-                        "data": None,
-                    }
+                        ctx.store(var_name, result, "succeeded")
+                        step_ok = True
+                        print(f"  OK")
+                        plan_summary_parts.append(f"Paso {step_num} ({resolved}): OK")
 
-                if isinstance(result, dict) and result.get("success") is False:
-                    err_msg = result.get('message', 'error desconocido')
-                    print(f"  Fallo explícito: {err_msg}")
-                    ctx.store(var_name, result, "failed_explicit")
-                    step_ok = False
-                    failed_step_detail = f"Paso {step_num}: {resolved} falló con: {err_msg}"
-                elif expected_fmt and not _validate_output(
-                    result, expected_fmt, tool_name
-                ):
-                    print(f"  Fallo de formato (esperado: {expected_fmt})")
-                    ctx.store(var_name, result, "format_mismatch")
-                    step_ok = False
-                    failed_step_detail = f"Paso {step_num}: {resolved} devolvió formato incorrecto (esperado: {expected_fmt})"
-                else:
-                    ctx.store(var_name, result, "succeeded")
-                    step_ok = True
-                    print(f"  OK")
-                    plan_summary_parts.append(f"Paso {step_num} ({resolved}): OK")
-
-                    if memory_enabled and result:
-                        try:
-                            _store_in_memory(resolved, var_name, result, requirements)
-                        except Exception:
-                            pass
+                        if memory_enabled and result:
+                            try:
+                                _store_in_memory(resolved, var_name, result, requirements)
+                            except Exception:
+                                pass
+                    _sp.set_output(str(result)[:500])
             else:
                 print(
                     f"  Herramienta '{tool_name}' no encontrada o es AgentLogic."
@@ -451,46 +549,77 @@ async def run_orchestrated_flow(
             break
         else:
             print(f"\nPlan completado exitosamente.")
-            execution_success = True
-            break
-
-    # --- GROUNDING VERIFICATION (Debugger) ---
-    if execution_success and world_model and world_model.get("keywords"):
-        artifacts = _get_artifacts_summary(ctx.outputs)
-        if debugger_agent is not None and hasattr(debugger_agent, "verify_grounding"):
-            try:
-                grounding_result = debugger_agent.verify_grounding(
-                    world_model["keywords"], artifacts
+            # --- GROUNDING GATE ---
+            if world_model and world_model.get("keywords"):
+                from cogniteam.agents.debugger_agent import GroundingValidator
+                artifacts = _get_artifacts_summary(ctx.outputs)
+                validator = GroundingValidator(max_replans=max_replanning)
+                grounding_result = validator.validate(
+                    artifacts_summary=artifacts,
+                    expected_keywords=world_model["keywords"],
+                    attempt=replan_count + 1,
                 )
-            except Exception:
-                from cogniteam.agents.debugger_agent import verify_grounding
-                grounding_result = verify_grounding(world_model["keywords"], artifacts)
-        else:
-            from cogniteam.agents.debugger_agent import verify_grounding
-            grounding_result = verify_grounding(world_model["keywords"], artifacts)
+                ctx.outputs["grounding_result"] = {
+                    "score": grounding_result.score,
+                    "verdict": grounding_result.verdict.value,
+                    "found": grounding_result.found_keywords,
+                    "missing": grounding_result.missing_keywords,
+                }
+                print(f"\n[Grounding Gate] Score: {grounding_result.score:.2f} | "
+                      f"Veredicto: {grounding_result.verdict.value} | "
+                      f"Faltan: {grounding_result.missing_keywords}")
 
-        if grounding_result:
-            gs = grounding_result.get("grounding_score", 0)
-            print(f"\n[Grounding] Score: {gs:.2f} | Encontradas: {grounding_result.get('found_keywords', [])}")
-            if gs < 0.6:
-                print(f"  [Grounding] Keywords faltantes: {grounding_result.get('missing_keywords', [])}")
-                print(f"  [Grounding] Acción correctiva: {grounding_result.get('corrective_action', 'N/A')}")
+                if grounding_result.should_continue():
+                    execution_success = True
+                    break
+                elif grounding_result.should_replan():
+                    replan_count += 1
+                    flow_failed = False
+                    feedback = (f"Grounding: score {grounding_result.score:.2f}, "
+                                f"faltan keywords: {grounding_result.missing_keywords}")
+                    ctx.outputs["last_deviation_analysis"] = feedback
+                    failed_plan_summary = f">>> GROUNDING: {feedback}"
+                    print(f"  ↻ Grounding dispara re-planificación #{replan_count}")
+                    continue
+                elif grounding_result.should_abort():
+                    print(f"  ✗ Grounding: abortando tras {replan_count + 1} intentos")
+                    execution_success = False
+                    flow_failed = True
+                    break
+            else:
+                execution_success = True
+                break
 
     # --- POST-EXECUTION FILE VALIDATION ---
     if execution_success and world_model and world_model.get("keywords"):
-        import os
         file_keywords = [kw for kw in world_model["keywords"] if "." in kw]
         if file_keywords:
             missing = []
             for fname in file_keywords:
-                fpath = os.path.join(settings.project_root, fname)
+                fpath = os.path.join(artifacts_dir, fname)
                 if not os.path.isfile(fpath):
                     missing.append(fname)
             if missing:
-                print(f"\n[Validación Post-Ejecución] Archivos esperados NO encontrados: {missing}")
+                print(f"\n[Validación Post-Ejecución] Archivos esperados NO encontrados en {artifacts_dir}: {missing}")
                 print(f"  El plan reportó éxito pero estos archivos no existen en disco.")
             else:
-                print(f"\n[Validación Post-Ejecución] Archivos verificados en disco: {file_keywords} ✅")
+                print(f"\n[Validación Post-Ejecución] Archivos verificados en {artifacts_dir}: {file_keywords} ✅")
+
+    # --- HTML QUALITY VERIFICATION (Debugger) ---
+    if execution_success:
+        from cogniteam.agents.debugger_agent import verify_html_quality
+        quality = verify_html_quality(project_root=artifacts_dir)
+        if quality["total_conflicts"] > 0:
+            print(f"\n[Calidad HTML] Score: {quality['quality_score']:.2f} | Conflictos: {quality['total_conflicts']} en {len(quality['files_with_conflicts'])} archivos")
+            for fwc in quality["files_with_conflicts"]:
+                for c in fwc["conflicts"]:
+                    print(f"  ⚠ {fwc['file']}: {c}")
+        elif quality["files_checked"] > 0:
+            print(f"\n[Calidad HTML] {quality['files_checked']} archivos revisados, sin conflictos ✅")
+
+    # --- FUNCTIONAL VALIDATION (Playwright headless) ---
+    if execution_success:
+        _run_functional_validation(artifacts_dir, ctx)
 
     # --- CALIBRATION (FC-RL emulado) ---
     if calibration_store is not None and domain and archetype and world_model:

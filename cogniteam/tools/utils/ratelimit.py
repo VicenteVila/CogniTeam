@@ -1,11 +1,48 @@
 import json
 import os
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional
 
 
 _STATE_DIR = Path.home() / ".cogniteam"
+
+# Circuit breaker state: {provider: {"failures": int, "open_until": float}}
+_CIRCUIT_BREAKERS: Dict[str, dict] = {}
+_CIRCUIT_FAILURE_THRESHOLD = 3
+_CIRCUIT_RETRY_SECONDS = 120
+
+
+def record_failure(provider: str):
+    """Track a provider failure. Opens circuit after threshold."""
+    now = time.time()
+    state = _CIRCUIT_BREAKERS.get(provider, {"failures": 0, "open_until": 0})
+    state["failures"] = state.get("failures", 0) + 1
+    if state["failures"] >= _CIRCUIT_FAILURE_THRESHOLD:
+        state["open_until"] = now + _CIRCUIT_RETRY_SECONDS
+        print(f"  [Circuit Breaker] {provider}: {state['failures']} fallos → abierto {_CIRCUIT_RETRY_SECONDS}s")
+    _CIRCUIT_BREAKERS[provider] = state
+
+
+def record_success(provider: str):
+    """Reset failure counter on success."""
+    state = _CIRCUIT_BREAKERS.get(provider, {})
+    if state.get("failures", 0) > 0:
+        print(f"  [Circuit Breaker] {provider}: éxito → reset")
+    _CIRCUIT_BREAKERS[provider] = {"failures": 0, "open_until": 0}
+
+
+def is_circuit_open(provider: str) -> bool:
+    """Returns True if circuit is open (skip this provider)."""
+    state = _CIRCUIT_BREAKERS.get(provider, {})
+    if state.get("failures", 0) < _CIRCUIT_FAILURE_THRESHOLD:
+        return False
+    if time.time() < state.get("open_until", 0):
+        return True
+    # Half-open: reset and let one request through
+    _CIRCUIT_BREAKERS[provider] = {"failures": _CIRCUIT_FAILURE_THRESHOLD - 1, "open_until": 0}
+    return False
 
 
 def _ensure_state_dir():
@@ -47,6 +84,7 @@ def check_rate_limit(
         state["date"] = today
         state["requests_today"] = 0
         state["minute_log"] = []
+        _save_state(service, state)
 
     now = time.time()
     state["minute_log"] = [t for t in state["minute_log"] if now - t < 60]

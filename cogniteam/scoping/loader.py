@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import traceforge
+
 from cogniteam.config.settings import settings
 from cogniteam.tools.utils.llm import llm_complete
 
@@ -157,6 +159,7 @@ def _domain_line(d: dict, loader: BlueprintLoader) -> str:
     return f"  {d['key']} ({d['name']}): {arch_list}"
 
 
+@traceforge.trace(agent="scoping.classify", tags=["llm", "classification"])
 def classify_task(prompt: str) -> Tuple[str, str, float, str]:
     """Returns (domain_key, archetype_key, confidence, reasoning)."""
     loader = BlueprintLoader()

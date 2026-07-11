@@ -1,0 +1,21 @@
+fecha,producto,categoria,cantidad,precio_unitario
+2024-01-15,Producto A,Electronica,3,250.00
+2024-01-16,Producto B,Hogar,5,80.00
+2024-01-17,Producto C,Juguetes,2,150.00
+2024-01-18,Producto D,Electronica,1,500.00
+2024-01-19,Producto E,Hogar,4,45.00
+2024-01-20,Producto F,Juguetes,6,30.00
+2024-01-21,Producto G,Ropa,8,25.00
+2024-01-22,Producto H,Electronica,2,350.00
+2024-01-23,Producto I,Alimentos,10,12.50
+2024-01-24,Producto J,Hogar,3,120.00
+2024-01-25,Producto K,Juguetes,4,45.00
+2024-01-26,Producto L,Ropa,6,35.00
+2024-01-27,Producto M,Alimentos,15,8.00
+2024-01-28,Producto N,Electronica,1,899.00
+2024-01-29,Producto O,Hogar,7,65.00
+2024-01-30,Producto P,Ropa,3,55.00
+2024-01-31,Producto Q,Alimentos,20,5.00
+2024-02-01,Producto R,Juguetes,5,25.00
+2024-02-02,Producto S,Electronica,2,450.00
+2024-02-03,Producto T,Hogar,4,90.00

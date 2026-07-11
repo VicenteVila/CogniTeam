@@ -2,6 +2,8 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
+import traceforge
+
 from cogniteam.scoping.loader import (
     BlueprintLoader,
     get_blueprint_for_task,
@@ -223,6 +225,7 @@ def _select_manual_classifications(current_blueprints: List[Dict[str, Any]]) -> 
     return selected
 
 
+@traceforge.trace(agent="scoping.questions", tags=["llm", "clarification"])
 def _generate_questions(blueprints: List[Dict[str, Any]], original_prompt: str, known_params: Dict[str, Any]) -> List[Dict[str, Any]]:
     required = []
     for bp in blueprints:

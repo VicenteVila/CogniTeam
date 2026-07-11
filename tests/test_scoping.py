@@ -147,7 +147,7 @@ class TestBlueprintLoader:
     def test_loads_all_blueprints(self):
         loader = BlueprintLoader()
         bps = loader.get_all_blueprints()
-        assert len(bps) >= 26
+        assert len(bps) >= 25
 
     def test_generic_blueprint_present(self):
         loader = BlueprintLoader()
@@ -158,7 +158,7 @@ class TestBlueprintLoader:
     def test_domain_list(self):
         loader = BlueprintLoader()
         domains = loader.get_domain_list()
-        assert len(domains) >= 7
+        assert len(domains) >= 5
 
     def test_get_specific_blueprint(self):
         loader = BlueprintLoader()

@@ -1,0 +1,1526 @@
+# =============================================================================
+# cogniteam_archetypes.yaml
+# =============================================================================
+# Configuración declarativa completa de los 13 dominios y 55 arquetipos de
+# CogniTeam para la jaula determinista (DeterministicCage).
+#
+# Principios:
+#   - Cada arquetipo define EXACTAMENTE qué debe generar el LLM
+#   - Los prompts son ultra-restringidos: estructura fija, huecos variables
+#   - La validación es estructural (regex), no semántica (LLM)
+#   - Todo lo que puede ser código, es código. Solo el relleno es LLM.
+# =============================================================================
+
+version: "2.0"
+metadata:
+  author: "CogniTeam + DeterministicCage"
+  last_updated: "2026-07-02"
+  total_domains: 13
+  total_archetypes: 55
+
+defaults:
+  llm:
+    model: "llama-3.3-70b-versatile"
+    temperature: 0.2
+    max_tokens: 4000
+    top_p: 0.95
+
+  cage:
+    max_llm_calls_per_task: 2
+    verification_enabled: true
+    auto_retry_on_fail: true
+    fallback_archetype: "generic-task"
+
+  thresholds:
+    min_confidence: 60
+    min_grounding_score: 0.6
+    max_re_retries: 1
+
+# =============================================================================
+# DOMINIO 1: WEB DEVELOPMENT
+# =============================================================================
+domains:
+  1_web_development:
+    description: "Desarrollo frontend y sitios web"
+    icon: "🌐"
+    default_model: "llama-3.3-70b-versatile"
+
+    archetypes:
+      # --- 1.1 LANDING PAGE ---
+      landing-page:
+        description: "Página de aterrizaje comercial de alta conversión"
+        priority: 10
+        estimated_success_rate: 0.92
+
+        inputs:
+          has_brand_assets:
+            type: bool
+            extract_from_task: ["logo", "marca", "brand", "favicon", "icono"]
+            default: false
+          has_copy_text:
+            type: bool
+            extract_from_task: ["texto", "copy", "contenido", "content", "escribir", "redactar"]
+            default: false
+          has_color_palette:
+            type: bool
+            extract_from_task: ["color", "paleta", "palette", "tema", "theme", "tonalidad"]
+            default: false
+          num_pages:
+            type: int
+            min: 1
+            max: 5
+            extract_regex: '(\d+)\s*(?:páginas|pages|pantallas|screens)'
+            default: 1
+          needs_interactivity:
+            type: bool
+            extract_from_task: ["interactivo", "interactive", "calculadora", "calculator", "formulario dinámico", "slider", "carrusel"]
+            default: false
+          needs_backend:
+            type: bool
+            extract_from_task: ["backend", "api", "base de datos", "database", "servidor", "server", "login", "auth"]
+            default: false
+          target_devices:
+            type: list
+            extract_from_task:
+              mobile: ["móvil", "mobile", "responsive", "phone", "celular"]
+              tablet: ["tablet", "ipad"]
+              desktop: ["desktop", "pc", "ordenador"]
+            default: ["desktop", "mobile"]
+          seo_required:
+            type: bool
+            extract_from_task: ["seo", "posicionamiento", "google", "ranking", "meta tags", "sitemap"]
+            default: false
+
+        structure:
+          - step: 1
+            action: html_structure
+            file: index.html
+            required_tags: ["<!DOCTYPE", "<html", "<head>", "<body>", "<header>", "<main>", "<footer>"]
+            required_sections: ["hero", "services", "contact"]
+          - step: 2
+            action: css_styling
+            file: styles.css
+            required_patterns: ["@media", "display: grid", "var(--", "rem", "flexbox"]
+            forbidden_patterns: ["!important", "px", "float:"]
+          - step: 3
+            action: js_interactivity
+            file: script.js
+            conditional: inputs.needs_interactivity
+            required_patterns: ["addEventListener", "querySelector", "classList"]
+            forbidden_patterns: ["eval(", "innerHTML = ", "document.write"]
+          - step: 4
+            action: seo_meta
+            file: index.html
+            conditional: inputs.seo_required
+            required_patterns: ["<meta name=\"description\"", "<meta name=\"keywords\"", "<title>"]
+          - step: 5
+            action: validation
+            tool: html_validator
+            checks: ["w3c", "accessibility", "mobile_friendly"]
+
+        llm_prompt: |
+          Crea una landing page con esta ESTRUCTURA OBLIGATORIA.
+          NO añadas secciones extra. NO uses frameworks (Bootstrap, Tailwind).
+
+          SECCIONES REQUERIDAS (en orden):
+          1. <header> con navegación sticky (mínimo 3 links: Inicio, Servicios, Contacto)
+          2. <section class="hero"> con:
+             - H1: "{{ title }}"
+             - Subtítulo de máximo 15 palabras: "{{ subtitle }}"
+             - CTA button prominente: "{{ cta_text }}"
+             - Imagen de fondo placeholder (gradient CSS o unsplash)
+          3. <section class="services"> con grid de 3 cards:
+             - Cada card: icono SVG, título, descripción 20 palabras, link
+          4. <section class="contact"> con:
+             - Formulario: nombre, email, mensaje (todos required)
+             - Validación HTML5
+             - Botón "Enviar"
+          5. <footer> con:
+             - Copyright año actual
+             - Links sociales (iconos SVG placeholder)
+             - Email de contacto
+
+          REGLAS DURAS:
+          - HTML5 semántico: header, main, section, article, footer
+          - CSS: mobile-first, breakpoint 768px, Grid + Flexbox
+          - {% if not inputs.has_color_palette %}Paleta por defecto:
+            --bg: #0f172a, --text: #f8fafc, --accent: #3b82f6, --card: #1e293b
+            {% else %}Usa variables CSS para la paleta definida{% endif %}
+          - {% if not inputs.has_copy_text %}Lorem ipsum máximo 20 palabras por sección{% endif %}
+          - {% if inputs.needs_interactivity %}JS vanilla: smooth scroll, mobile menu toggle, form validation{% endif %}
+          - {% if inputs.seo_required %}Meta description, Open Graph tags, canonical URL{% endif %}
+          - Máximo {{ inputs.num_pages }} página(s)
+
+          OUTPUT: Solo código HTML completo (CSS en <style>, JS en <script>).
+          Sin markdown, sin explicaciones, sin comentarios de sección.
+
+        verification:
+          required_tags: ["html", "head", "body", "header", "main", "footer", "section"]
+          required_classes: ["hero", "services", "contact"]
+          forbidden_patterns: ['<script src="https://evil', 'eval(', 'document.write', 'innerHTML = ']
+          min_length: 2000
+          max_length: 15000
+
+        grounding_keywords: ["html", "responsive", "hero", "services", "contact-form", "cta", "footer"]
+
+        thresholds:
+          min_confidence: 65
+          max_re_retries: 1
+
+      # --- 1.2 ECOMMERCE ---
+      ecommerce:
+        description: "Tienda online mínima viable con catálogo y checkout"
+        priority: 10
+        estimated_success_rate: 0.85
+
+        inputs:
+          payment_required:
+            type: bool
+            extract_from_task: ["pago", "payment", "stripe", "paypal", "tarjeta", "card", "checkout", "comprar"]
+            default: false
+          num_products:
+            type: int
+            min: 1
+            max: 20
+            extract_regex: '(\d+)\s*(?:productos|products|items)'
+            default: 6
+          has_product_images:
+            type: bool
+            extract_from_task: ["imágenes", "fotos", "images", "photos", "galería"]
+            default: false
+          needs_cart:
+            type: bool
+            extract_from_task: ["carrito", "cart", "cesta", "basket"]
+            default: true
+          needs_wishlist:
+            type: bool
+            extract_from_task: ["wishlist", "favoritos", "guardar", "save for later"]
+            default: false
+
+        structure:
+          - step: 1
+            action: product_data
+            file: products.json
+            schema:
+              id: int
+              name: str
+              price: float
+              category: str
+              image: str
+              description: str
+          - step: 2
+            action: product_listing
+            file: index.html
+            required_sections: ["header", "filters", "product-grid", "pagination"]
+          - step: 3
+            action: product_detail
+            file: product.html
+            required_sections: ["image-gallery", "info", "add-to-cart", "related-products"]
+          - step: 4
+            action: cart_logic
+            file: cart.js
+            conditional: inputs.needs_cart
+            required_features: ["add", "remove", "update-quantity", "persist-localStorage"]
+          - step: 5
+            action: checkout
+            file: checkout.html
+            conditional: inputs.payment_required
+            required_sections: ["cart-summary", "shipping-form", "payment-form", "order-confirmation"]
+          - step: 6
+            action: validation
+            tool: html_validator
+
+        llm_prompt: |
+          Crea un ecommerce MÍNIMO VIABLE.
+          Máximo {{ inputs.num_products }} productos de ejemplo.
+          {% if not inputs.payment_required %}NO implementes pasarela de pago real. Simula checkout.{% endif %}
+
+          ARCHIVOS REQUERIDOS:
+          1. index.html - Grid de productos con filtros por categoría
+          2. product.html - Vista detalle con galería y specs
+          3. cart.html - Resumen de carrito editable
+          4. checkout.html - Formulario de envío + pago (simulado)
+          5. styles.css - CSS puro, responsive
+          6. app.js - Lógica de carrito, filtros, búsqueda
+
+          ESTRUCTURA index.html:
+          - Header: logo, search bar, icono carrito (contador), usuario
+          - Filtros sidebar: categorías, rango de precio, ordenar
+          - Product grid: imagen, nombre, precio, badge "Oferta" si aplica
+          - Paginación: máximo 8 productos por página
+          - Footer: links legales, newsletter
+
+          ESTRUCTURA product.html:
+          - Breadcrumb: Inicio > Categoría > Producto
+          - Galería: imagen principal + thumbnails (click para cambiar)
+          - Info: nombre, precio, descripción, selector talla/color
+          - CTA: "Añadir al carrito", "Comprar ahora"
+          - Tabs: Descripción, Especificaciones, Reviews
+
+          REGLAS DURAS:
+          - Datos de productos en products.json (array de objetos)
+          - Carrito en localStorage (persistente entre sesiones)
+          - {% if inputs.needs_cart %}Funciones: addToCart, removeFromCart, updateQuantity, getCartTotal{% endif %}
+          - {% if inputs.needs_wishlist %}Wishlist: toggleWishlist, isInWishlist{% endif %}
+          - Sin frameworks JS (React, Vue). Vanilla JS only.
+          - Imágenes: placeholder.com o SVG data URI
+          - Precios: formato €XX.XX
+
+          OUTPUT: Código de cada archivo separado por === FILENAME ===
+
+        verification:
+          required_files: ["index.html", "styles.css", "app.js"]
+          required_patterns: ["localStorage", "JSON.parse", "querySelector"]
+          forbidden_patterns: ["<script src="https://", "eval(", "innerHTML"]
+
+        grounding_keywords: ["product", "cart", "checkout", "localStorage", "filter"]
+
+        thresholds:
+          min_confidence: 55
+          max_re_retries: 1
+
+      # --- 1.3 SAAS DASHBOARD ---
+      saas-dashboard:
+        description: "Panel de administración con métricas y gráficos"
+        priority: 9
+        estimated_success_rate: 0.80
+
+        inputs:
+          auth_required:
+            type: bool
+            extract_from_task: ["login", "auth", "usuario", "user", "password", "oauth", "jwt"]
+            default: false
+          num_widgets:
+            type: int
+            min: 1
+            max: 8
+            extract_regex: '(\d+)\s*(?:widgets|gráficos|charts|métricas)'
+            default: 4
+          data_source:
+            type: str
+            extract_from_task:
+              api: ["api", "endpoint", "rest", "graphql"]
+              static: ["mock", "estático", "dummy", "fake"]
+            default: "static"
+
+        structure:
+          - step: 1
+            action: auth_flow
+            file: login.html
+            conditional: inputs.auth_required
+            required_sections: ["form", "forgot-password", "oauth-buttons"]
+          - step: 2
+            action: dashboard_layout
+            file: dashboard.html
+            required_sections: ["sidebar", "header", "main-content", "footer"]
+          - step: 3
+            action: widgets
+            file: widgets.js
+            required_types: ["stat-card", "chart-line", "chart-pie", "data-table"]
+          - step: 4
+            action: data_integration
+            file: api.js
+            conditional: inputs.data_source == "api"
+
+        llm_prompt: |
+          Crea un dashboard de administración SaaS.
+
+          LAYOUT (CSS Grid):
+          - Sidebar izquierda: colapsable, iconos + texto, 5 items máximo
+            (Dashboard, Analytics, Users, Settings, Logout)
+          - Header: search bar, notificaciones (badge), perfil usuario, tema toggle
+          - Main: grid de widgets responsive
+          - Footer: versión app, links legales
+
+          WIDGETS ({{ inputs.num_widgets }} mínimo):
+          1. Stat cards: 4 métricas (icono, valor, label, cambio % con flecha)
+          2. Chart de líneas: últimos 30 días (Chart.js CDN)
+          3. Chart circular: distribución (Chart.js CDN)
+          4. Tabla de datos: 10 filas, ordenable, paginada
+          5. Activity feed: timeline de eventos recientes
+          {% if inputs.num_widgets > 5 %}6. Mapa de calor o gauge chart{% endif %}
+
+          REGLAS DURAS:
+          - CSS variables para tema: --sidebar-width, --header-height, --primary, --bg, --text
+          - Sidebar: transform translateX en móvil, overlay backdrop
+          - Chart.js desde CDN (chartjs.org)
+          - Datos: arrays JS con objetos mock
+          - {% if inputs.auth_required %}JWT en localStorage, logout limpia token{% endif %}
+          - Sin backend real. Todo mock data.
+
+          OUTPUT: HTML completo con CSS en <style> y JS en <script>.
+
+        verification:
+          required_patterns: ["Chart.js", "sidebar", "grid", "var(--"]
+          forbidden_patterns: ["<script src="http://", "eval("]
+
+        grounding_keywords: ["dashboard", "chart", "widget", "sidebar", "grid"]
+
+        thresholds:
+          min_confidence: 60
+
+      # --- 1.4 CMS BLOG ---
+      cms-blog:
+        description: "Sistema de gestión de contenido tipo blog"
+        priority: 8
+
+        inputs:
+          num_posts:
+            type: int
+            default: 10
+          has_categories:
+            type: bool
+            extract_from_task: ["categorías", "categories", "tags", "etiquetas"]
+            default: true
+          has_comments:
+            type: bool
+            extract_from_task: ["comentarios", "comments", "discusión", "discussion"]
+            default: false
+
+        llm_prompt: |
+          Crea un blog con estas páginas:
+          1. index.html - Listado de posts con excerpt, autor, fecha, categoría
+          2. post.html - Vista individual con navegación prev/next
+          3. category.html - Filtrado por categoría
+          {% if inputs.has_comments %}4. comments.js - Sistema de comentarios (localStorage){% endif %}
+
+          Cada post: título, imagen destacada, contenido markdown-like, autor, fecha, tags
+
+          OUTPUT: HTML + CSS + JS. Datos de posts en array JS.
+
+        grounding_keywords: ["blog", "post", "category", "author", "tag"]
+
+      # --- 1.5 PORTFOLIO ---
+      portfolio:
+        description: "Portafolio profesional con proyectos"
+        priority: 8
+
+        inputs:
+          num_projects:
+            type: int
+            default: 6
+          has_contact_form:
+            type: bool
+            default: true
+
+        llm_prompt: |
+          Crea un portfolio profesional:
+          1. Hero con foto placeholder, nombre, tagline, CTA
+          2. About: bio de 50 palabras, skills con barras de progreso
+          3. Projects: grid de {{ inputs.num_projects }} tarjetas con imagen, título, descripción, tech stack, link
+          4. {% if inputs.has_contact_form %}Contact: formulario + redes sociales{% endif %}
+
+          OUTPUT: Single page HTML con scroll suave entre secciones.
+
+        grounding_keywords: ["portfolio", "project", "skill", "about", "contact"]
+
+# =============================================================================
+# DOMINIO 2: SOFTWARE DEVELOPMENT
+# =============================================================================
+  2_software_development:
+    description: "Desarrollo de software y aplicaciones"
+    icon: "💻"
+
+    archetypes:
+      # --- 2.1 API DEVELOPMENT ---
+      api-development:
+        description: "API REST/GraphQL con documentación"
+        priority: 10
+
+        inputs:
+          language:
+            type: str
+            extract_from_task:
+              python: ["python", "fastapi", "flask", "django"]
+              node: ["node", "express", "nestjs", "javascript"]
+              go: ["go", "golang", "gin"]
+              rust: ["rust", "actix", "rocket"]
+            default: "python"
+          num_endpoints:
+            type: int
+            min: 2
+            max: 15
+            extract_regex: '(\d+)\s*(?:endpoints|rutas|routes)'
+            default: 5
+          needs_auth:
+            type: bool
+            extract_from_task: ["auth", "jwt", "oauth", "login", "token", "api-key"]
+            default: false
+          needs_tests:
+            type: bool
+            extract_from_task: ["tests", "testing", "pytest", "jest", "unit test"]
+            default: false
+          needs_docs:
+            type: bool
+            extract_from_task: ["docs", "documentación", "swagger", "openapi", "readme"]
+            default: true
+
+        structure:
+          - step: 1
+            action: openapi_spec
+            file: openapi.yaml
+            required_sections: ["info", "paths", "components"]
+          - step: 2
+            action: server_setup
+            file: "{{ inputs.language }}_server"
+            templates:
+              python: "main.py"
+              node: "server.js"
+              go: "main.go"
+              rust: "main.rs"
+          - step: 3
+            action: routes
+            file: routes/
+            num_files: "{{ inputs.num_endpoints // 5 + 1 }}"
+          - step: 4
+            action: tests
+            file: tests/
+            conditional: inputs.needs_tests
+          - step: 5
+            action: docs
+            file: README.md
+            conditional: inputs.needs_docs
+
+        llm_prompt: |
+          Crea una API REST en {{ inputs.language }}.
+
+          ENDPOINTS REQUERIDOS ({{ inputs.num_endpoints }}):
+          - GET /items - Listar con paginación (limit, offset, sort)
+          - GET /items/{id} - Obtener uno (404 si no existe)
+          - POST /items - Crear (validación de campos requeridos)
+          - PUT /items/{id} - Actualizar completo
+          - PATCH /items/{id} - Actualizar parcial
+          - DELETE /items/{id} - Eliminar (confirmación)
+          {% if inputs.num_endpoints > 6 %}- GET /items/search?q={query} - Búsqueda{% endif %}
+          {% if inputs.num_endpoints > 7 %}- GET /items/stats - Estadísticas agregadas{% endif %}
+
+          REGLAS DURAS:
+          - {{ inputs.language }} nativo, sin frameworks ORM (SQL crudo o mock data)
+          - Validación de entrada en TODOS los endpoints
+          - Manejo de errores: 400 (bad request), 404 (not found), 500 (server error)
+          - Respuesta JSON consistente: { "success": bool, "data": any, "error": string|null }
+          - {% if inputs.needs_auth %}JWT: login, register, middleware verifyToken{% endif %}
+          - {% if inputs.needs_tests %}Tests: pytest/jest con cobertura >80%{% endif %}
+          - Datos en memoria (array/dict), NO base de datos real
+
+          OUTPUT: Código completo listo para ejecutar.
+
+        verification:
+          required_patterns:
+            python: ["def ", "FastAPI", "@app.", "BaseModel"]
+            node: ["const express", "app.get", "app.post", "module.exports"]
+            go: ["func ", "gin.", "c.JSON", "r.Run"]
+            rust: ["fn ", "actix", "HttpResponse", "web::"]
+          forbidden_patterns: ["os.system", "subprocess", "exec(", "eval("]
+
+        grounding_keywords: ["endpoint", "api", "rest", "json", "validation"]
+
+        thresholds:
+          min_confidence: 60
+
+      # --- 2.2 MOBILE APPS ---
+      mobile-apps:
+        description: "Aplicaciones móviles multiplataforma"
+        priority: 9
+
+        inputs:
+          framework:
+            type: str
+            extract_from_task:
+              react_native: ["react native", "rn"]
+              flutter: ["flutter", "dart"]
+              expo: ["expo"]
+            default: "react_native"
+          num_screens:
+            type: int
+            default: 3
+          needs_push:
+            type: bool
+            extract_from_task: ["notificaciones", "push", "firebase"]
+            default: false
+
+        llm_prompt: |
+          Crea una app móvil con {{ inputs.framework }}.
+
+          PANTALLAS ({{ inputs.num_screens }}):
+          1. Home - Lista scrollable con pull-to-refresh
+          2. Detail - Vista detalle con imagen, info, acciones
+          3. Profile - Datos usuario, settings, logout
+          {% if inputs.num_screens > 3 %}4. Search - Búsqueda con filtros{% endif %}
+
+          NAVEGACIÓN: Bottom tabs (Home, Search, Profile) + Stack dentro de Home
+
+          REGLAS DURAS:
+          - Expo SDK (sin eject)
+          - Styled Components o StyleSheet
+          - Datos mock en archivo separado
+          - {% if inputs.needs_push %}Firebase Cloud Messaging setup{% endif %}
+          - Iconos: @expo/vector-icons
+
+          OUTPUT: App.js + componentes principales.
+
+        grounding_keywords: ["screen", "navigation", "component", "expo", "mobile"]
+
+      # --- 2.3 DESKTOP APPS ---
+      desktop-apps:
+        description: "Aplicaciones de escritorio multiplataforma"
+        priority: 7
+
+        inputs:
+          framework:
+            type: str
+            extract_from_task:
+              electron: ["electron"]
+              tauri: ["tauri", "rust"]
+              tkinter: ["tkinter", "python gui"]
+            default: "electron"
+
+        llm_prompt: |
+          Crea una app de escritorio con {{ inputs.framework }}.
+
+          FEATURES:
+          - Ventana principal con menú (File, Edit, View, Help)
+          - Área de trabajo central
+          - Status bar inferior
+          - Preferencias guardadas en localStorage/config
+
+          OUTPUT: Código principal + package.json si aplica.
+
+        grounding_keywords: ["window", "menu", "ipc", "desktop", "electron"]
+
+      # --- 2.4 CLI TOOLS ---
+      cli-tools:
+        description: "Herramientas de línea de comandos"
+        priority: 7
+
+        inputs:
+          language:
+            type: str
+            default: "python"
+
+        llm_prompt: |
+          Crea una CLI tool en {{ inputs.language }}.
+
+          REQUISITOS:
+          - argparse/click para flags y subcomandos
+          - Progress bar para operaciones largas
+          - Logging a archivo
+          - Config file (JSON/YAML)
+          - Tests con pytest
+
+          OUTPUT: Script principal + setup.py + tests.
+
+        grounding_keywords: ["command", "cli", "argparse", "flag", "config"]
+
+# =============================================================================
+# DOMINIO 3: 3D DESIGN
+# =============================================================================
+  3_3d_design:
+    description: "Diseño y modelado 3D"
+    icon: "🎨"
+
+    archetypes:
+      3d-archviz:
+        description: "Visualización arquitectónica 3D"
+        priority: 10
+
+        inputs:
+          output_format:
+            type: str
+            default: "glb"
+          polygon_budget:
+            type: int
+            default: 50000
+
+        llm_prompt: |
+          Crea una escena 3D arquitectónica con Three.js.
+
+          ELEMENTOS:
+          - Edificio principal con materiales PBR
+          - Iluminación: HDRI + luces direccionales
+          - Cámara orbital con controles
+          - Ground plane con sombras
+
+          OUTPUT: HTML con Three.js desde CDN.
+
+        grounding_keywords: ["three.js", "mesh", "material", "lighting", "camera"]
+
+      3d-product:
+        description: "Visualización de producto 3D"
+        priority: 9
+
+        llm_prompt: |
+          Crea un visor 3D de producto.
+
+          FEATURES:
+          - Modelo rotatorio 360° (drag)
+          - Zoom con scroll
+          - Hotspots informativos (click)
+          - Selector de colores (cambia material)
+
+          OUTPUT: HTML + Three.js.
+
+        grounding_keywords: ["3d", "product", "viewer", "rotation", "material"]
+
+      3d-animation:
+        description: "Animaciones 3D"
+        priority: 8
+
+        llm_prompt: |
+          Crea una animación 3D con Three.js.
+
+          FEATURES:
+          - Timeline de animación
+          - Keyframes para posición, rotación, escala
+          - Easing functions
+          - Loop/repeat controls
+
+          OUTPUT: HTML + animación JS.
+
+        grounding_keywords: ["animation", "keyframe", "timeline", "easing", "loop"]
+
+# =============================================================================
+# DOMINIO 4: GRAPHIC DESIGN
+# =============================================================================
+  4_graphic_design:
+    description: "Diseño gráfico y branding"
+    icon: "🎭"
+
+    archetypes:
+      branding:
+        description: "Identidad de marca completa"
+        priority: 10
+
+        inputs:
+          deliverables:
+            type: list
+            default: ["logo", "colors", "typography"]
+
+        llm_prompt: |
+          Crea una guía de identidad de marca.
+
+          ENTREGABLES:
+          1. Logo: concepto + variaciones (horizontal, vertical, icono)
+          2. Paleta de colores: primario, secundario, acento, neutros (códigos HEX)
+          3. Tipografía: títulos, cuerpo, acentos (fuentes Google Fonts)
+          4. Aplicaciones: tarjeta de visita, membrete, firma email
+
+          OUTPUT: Documento HTML/CSS con muestras visuales.
+
+        grounding_keywords: ["logo", "color", "typography", "brand", "guideline"]
+
+      ui-ux:
+        description: "Diseño de interfaces de usuario"
+        priority: 10
+
+        llm_prompt: |
+          Crea un design system UI.
+
+          COMPONENTES:
+          - Buttons: primary, secondary, ghost, disabled
+          - Inputs: text, password, select, checkbox, radio
+          - Cards: default, hover, selected
+          - Modals: alert, confirm, form
+          - Navigation: tabs, breadcrumbs, pagination
+
+          OUTPUT: HTML/CSS con componentes documentados.
+
+        grounding_keywords: ["component", "button", "input", "card", "modal"]
+
+      marketing-materials:
+        description: "Material de marketing visual"
+        priority: 8
+
+        llm_prompt: |
+          Crea material de marketing.
+
+          FORMATOS:
+          - Post Instagram: 1080x1080
+          - Story: 1080x1920
+          - Banner web: 1200x300
+          - Flyer A5: 148x210mm
+
+          OUTPUT: HTML/CSS con diseños responsive.
+
+        grounding_keywords: ["layout", "image", "text", "cta", "social"]
+
+# =============================================================================
+# DOMINIO 5: VIDEO PRODUCTION
+# =============================================================================
+  5_video_production:
+    description: "Producción y edición de video"
+    icon: "🎬"
+
+    archetypes:
+      video-production:
+        description: "Edición y postproducción de video"
+        priority: 10
+
+        inputs:
+          duration:
+            type: int
+            default: 60
+          resolution:
+            type: str
+            default: "1080p"
+
+        llm_prompt: |
+          Crea un script de edición de video.
+
+          ESTRUCTURA ({{ inputs.duration }}s):
+          1. Hook (0-5s): captar atención
+          2. Problema (5-20s): identificar dolor
+          3. Solución (20-45s): presentar producto/servicio
+          4. CTA (45-60s): llamada a la acción
+
+          NOTAS TÉCNICAS:
+          - Transiciones: cut, dissolve, slide
+          - Música: upbeat, instrumental
+          - Texto en pantalla: lower thirds, titles
+
+          OUTPUT: Guion técnico en markdown.
+
+        grounding_keywords: ["video", "edit", "timeline", "transition", "cut"]
+
+      motion-graphics:
+        description: "Gráficos en movimiento y animación 2D"
+        priority: 9
+
+        llm_prompt: |
+          Crea una animación motion graphics.
+
+          ELEMENTOS:
+          - Logo reveal (2-3s)
+          - Transiciones de escena
+          - Texto animado (typewriter, fade in)
+          - Iconos animados (morphing)
+          - Background patterns
+
+          OUTPUT: CSS animations + SVG.
+
+        grounding_keywords: ["animation", "motion", "svg", "css", "keyframe"]
+
+# =============================================================================
+# DOMINIO 6: MARKETING & GROWTH
+# =============================================================================
+  6_marketing_growth:
+    description: "Marketing digital y crecimiento"
+    icon: "📈"
+
+    archetypes:
+      seo-sem:
+        description: "Optimización para motores de búsqueda"
+        priority: 10
+
+        inputs:
+          target_keywords:
+            type: list
+            default: []
+
+        llm_prompt: |
+          Crea una estrategia SEO completa.
+
+          ENTREGABLES:
+          1. Keyword research: 20 keywords principales + volumen + dificultad
+          2. On-page SEO: meta titles, descriptions, H1-H6 structure
+          3. Content calendar: 12 temas para blog
+          4. Technical SEO: sitemap, robots.txt, schema markup
+          5. Link building: 10 oportunidades de backlinks
+
+          OUTPUT: Documento markdown con tablas.
+
+        grounding_keywords: ["seo", "keyword", "meta", "backlink", "content"]
+
+      social-media:
+        description: "Gestión de redes sociales"
+        priority: 10
+
+        llm_prompt: |
+          Crea un plan de contenido para redes sociales.
+
+          PLAN MENSUAL:
+          - 12 posts (3 por semana)
+          - 4 stories diarias
+          - 1 reel/video por semana
+          - 1 live por mes
+
+          CADA POST INCLUYE:
+          - Copy principal (hook + body + CTA)
+          - Hashtags (5-10)
+          - Mejor horario de publicación
+          - Tipo de contenido (educativo, entretenido, promocional)
+
+          OUTPUT: Calendario en markdown + copys individuales.
+
+        grounding_keywords: ["post", "hashtag", "engagement", "calendar", "copy"]
+
+      campaign-launch:
+        description: "Lanzamiento de campañas publicitarias"
+        priority: 9
+
+        llm_prompt: |
+          Crea un plan de lanzamiento de campaña.
+
+          ESTRUCTURA:
+          1. Objetivos SMART
+          2. Target audience (3 segmentos)
+          3. Mensajes clave por segmento
+          4. Canales y presupuesto sugerido
+          5. Creatividades: 3 conceptos + copy
+          6. Timeline: 4 fases (awareness, consideration, conversion, retention)
+          7. KPIs y métricas
+          8. Plan de contingencia
+
+          OUTPUT: Documento ejecutivo en markdown.
+
+        grounding_keywords: ["campaign", "audience", "kpi", "conversion", "launch"]
+
+      email-marketing:
+        description: "Campañas de email marketing"
+        priority: 8
+
+        llm_prompt: |
+          Crea una secuencia de email marketing.
+
+          SECUENCIA (5 emails):
+          1. Bienvenida + valor inmediato
+          2. Educación + caso de éxito
+          3. Objeciones + FAQs
+          4. Oferta + urgencia
+          5. Re-engagement o upsell
+
+          CADA EMAIL:
+          - Subject line (3 variantes A/B)
+          - Preview text
+          - Body: personalización, storytelling, CTA claro
+          - P.S. con bonus
+
+          OUTPUT: 5 emails en formato markdown.
+
+        grounding_keywords: ["email", "subject", "template", "sequence", "cta"]
+
+# =============================================================================
+# DOMINIO 7: SOFTWARE ARCHITECTURE
+# =============================================================================
+  7_software_architecture:
+    description: "Arquitectura de software y diseño de sistemas"
+    icon: "🏗️"
+
+    archetypes:
+      system-design:
+        description: "Diseño de sistemas distribuidos"
+        priority: 10
+
+        inputs:
+          scale_users:
+            type: int
+            default: 10000
+
+        llm_prompt: |
+          Diseña un sistema para {{ inputs.scale_users }} usuarios concurrentes.
+
+          ENTREGABLES:
+          1. Diagrama de arquitectura (ASCII art o Mermaid)
+          2. Componentes: API Gateway, Load Balancer, App Servers, Cache, DB, Queue
+          3. Decisiones de diseño (trade-offs)
+          4. Patrones aplicados (CQRS, Event Sourcing, Saga)
+          5. Plan de escalabilidad (10x, 100x)
+          6. Disaster recovery
+
+          OUTPUT: Documento técnico en markdown.
+
+        grounding_keywords: ["architecture", "component", "scalability", "pattern", "diagram"]
+
+      microservices:
+        description: "Arquitectura de microservicios"
+        priority: 10
+
+        llm_prompt: |
+          Diseña una arquitectura de microservicios.
+
+          SERVICIOS (mínimo 5):
+          - API Gateway (Kong/Nginx)
+          - Auth Service (JWT, OAuth2)
+          - User Service (CRUD usuarios)
+          - Product Service (catálogo)
+          - Order Service (pedidos)
+          - Notification Service (email, push)
+
+          CADA SERVICIO INCLUYE:
+          - Responsabilidad única
+          - API REST
+          - Base de datos propia
+          - Comunicación: sync (HTTP) vs async (message queue)
+
+          OUTPUT: Diagrama + especificación de cada servicio.
+
+        grounding_keywords: ["microservice", "gateway", "service", "container", "api"]
+
+      security:
+        description: "Arquitectura de seguridad"
+        priority: 9
+
+        llm_prompt: |
+          Diseña la seguridad de un sistema.
+
+          CAPAS:
+          1. Perimeter: WAF, DDoS protection, rate limiting
+          2. Network: VPC, subnets, security groups, VPN
+          3. Application: AuthN/AuthZ, input validation, output encoding
+          4. Data: Encryption at rest, in transit, key management
+          5. Monitoring: SIEM, anomaly detection, incident response
+
+          OUTPUT: Documento de arquitectura de seguridad.
+
+        grounding_keywords: ["security", "auth", "encryption", "firewall", "monitoring"]
+
+# =============================================================================
+# DOMINIO 8: GAME DEVELOPMENT
+# =============================================================================
+  8_game_development:
+    description: "Desarrollo de videojuegos"
+    icon: "🎮"
+
+    archetypes:
+      game-development:
+        description: "Juegos 2D/3D completos"
+        priority: 10
+
+        inputs:
+          genre:
+            type: str
+            default: "platformer"
+          target_platform:
+            type: str
+            default: "web"
+
+        llm_prompt: |
+          Crea un juego {{ inputs.genre }} para {{ inputs.target_platform }}.
+
+          MECÁNICAS:
+          - Movimiento: walk, jump, dash
+          - Colisiones: AABB + raycasting
+          - Enemigos: patrol, chase, attack
+          - Items: collectibles, power-ups
+          - UI: health bar, score, timer, pause menu
+          - Audio: SFX + BGM (placeholder)
+
+          OUTPUT: HTML5 Canvas + JavaScript.
+
+        grounding_keywords: ["game", "level", "sprite", "physics", "input"]
+
+      game-assets:
+        description: "Assets y recursos para juegos"
+        priority: 8
+
+        llm_prompt: |
+          Crea assets para un juego.
+
+          ENTREGABLES:
+          - Sprite sheet: personaje (idle, walk, jump, attack)
+          - Tileset: 16x16 o 32x32, 10 tipos de tile
+          - UI kit: botones, panels, icons, font
+          - Audio: placeholder sounds (beep, jump, coin)
+
+          OUTPUT: CSS/SVG sprites + especificación.
+
+        grounding_keywords: ["sprite", "texture", "audio", "animation", "tileset"]
+
+# =============================================================================
+# DOMINIO 9: DATA SCIENCE
+# =============================================================================
+  9_data_science:
+    description: "Ciencia de datos y machine learning"
+    icon: "📊"
+
+    archetypes:
+      ml-model:
+        description: "Modelos de machine learning"
+        priority: 10
+
+        inputs:
+          objective:
+            type: str
+            default: "classification"
+          data_source_type:
+            type: str
+            default: "csv"
+
+        llm_prompt: |
+          Crea un pipeline de ML completo.
+
+          PIPELINE:
+          1. load_data.py - Carga desde {{ inputs.data_source_type }}
+          2. preprocess.py - Limpieza, encoding, scaling, feature engineering
+          3. train.py - Entrenamiento con validación cruzada (5-fold)
+          4. evaluate.py - Métricas: {{ "accuracy, precision, recall, F1, ROC-AUC" if inputs.objective == 'classification' else "MSE, RMSE, R², MAE" if inputs.objective == 'regression' else "silhouette, inertia, davies-bouldin" }}
+          5. predict.py - Inferencia sobre nuevos datos
+          6. model.pkl - Modelo serializado con joblib
+
+          REGLAS DURAS:
+          - scikit-learn obligatorio
+          - Manejo de desbalanceo (SMOTE o class_weight)
+          - Guardar métricas en metrics.json
+          - Reproducibilidad: random_state fijo
+          - Sin deep learning (sklearn only)
+
+          OUTPUT: Scripts Python listos para ejecutar.
+
+        grounding_keywords: ["model", "train", "test", "feature", "accuracy"]
+
+      data-pipeline:
+        description: "Pipelines de datos ETL/ELT"
+        priority: 9
+
+        llm_prompt: |
+          Crea un pipeline ETL completo.
+
+          COMPONENTES:
+          1. extract.py - Extraer de {{ inputs.data_source_type }}
+             - Manejo de errores y retries (3 intentos)
+             - Logging de cada extracción
+          2. transform.py - Transformaciones
+             - Limpieza: nulls, outliers, duplicados
+             - Normalización: min-max, standard, robust
+             - Enriquecimiento: joins, lookups
+          3. load.py - Cargar a destino
+             - Validación de schema antes de carga
+             - Upsert (insert or update)
+          4. pipeline.py - Orquestación
+             - DAG de dependencias
+             - Scheduling con cron
+             - Alertas por email/Slack
+
+          OUTPUT: Scripts Python + config.yaml.
+
+        grounding_keywords: ["extract", "transform", "load", "pipeline", "schedule"]
+
+      analytics:
+        description: "Análisis de datos y business intelligence"
+        priority: 9
+
+        llm_prompt: |
+          Crea un dashboard de analytics.
+
+          MÉTRICAS:
+          - Acquisition: usuarios nuevos, canales, CAC
+          - Activation: onboarding completion, aha-moment rate
+          - Retention: D1, D7, D30 retention
+          - Revenue: ARPU, LTV, MRR, churn rate
+          - Referral: NPS, viral coefficient
+
+          OUTPUT: Jupyter notebook con análisis + visualizaciones.
+
+        grounding_keywords: ["metric", "visualization", "insight", "report", "kpi"]
+
+# =============================================================================
+# DOMINIO 10: CONTENT WRITING
+# =============================================================================
+  10_content_writing:
+    description: "Redacción y creación de contenido"
+    icon: "✍️"
+
+    archetypes:
+      blog-article:
+        description: "Artículos de blog optimizados"
+        priority: 10
+
+        inputs:
+          word_count:
+            type: int
+            default: 800
+          tone:
+            type: str
+            default: "professional"
+
+        llm_prompt: |
+          Escribe un artículo de blog.
+
+          FORMATO: Markdown
+          LONGITUD: {{ inputs.word_count }} palabras
+          TONO: {{ inputs.tone }}
+
+          ESTRUCTURA:
+          1. H1: Título atractivo (máximo 60 caracteres, keyword al inicio)
+          2. Introducción (100 palabras):
+             - Hook: stat sorprendente, pregunta o story
+             - Problema: dolor del lector
+             - Promesa: qué aprenderá
+          3. H2: "¿Qué es [tema]?" (150 palabras)
+             - Definición clara
+             - Contexto/Importancia
+          4. H2: "Beneficios de [tema]" (200 palabras)
+             - Lista de 3-5 items con formato "Beneficio + Cómo + Ejemplo"
+          5. H2: "Cómo implementar [tema]" (200 palabras)
+             - Pasos numerados (3-5 pasos)
+             - Cada paso: acción + resultado esperado
+          6. H2: "Errores comunes" (100 palabras)
+             - 3 errores + cómo evitarlos
+          7. H2: "Conclusión" (50 palabras)
+             - Resumen en 2 líneas
+             - CTA: pregunta al lector o siguiente paso
+
+          REGLAS DURAS:
+          - Párrafos de máximo 3-4 líneas
+          - Subtítulos descriptivos (H2/H3), NO genéricos
+          - {% if inputs.seo_keywords %}Keywords: {{ inputs.seo_keywords | join(", ") }} (densidad 1-2%){% endif %}
+          - Lenguaje {{ inputs.target_language }}
+          - Sin frases de relleno: "En conclusión", "Como hemos visto", "Es importante destacar"
+          - Datos/conceptos verificables (NO inventar stats)
+
+          OUTPUT: Solo markdown, sin explicaciones.
+
+        grounding_keywords: ["blog", "article", "heading", "paragraph", "seo"]
+
+      copywriting:
+        description: "Copy de ventas y marketing"
+        priority: 10
+
+        llm_prompt: |
+          Escribe copy de ventas.
+
+          FORMATO: Texto plano con secciones marcadas
+
+          === HEADLINE ===
+          Variante 1 (Directa): [Beneficio principal] + [Resultado específico]
+          Variante 2 (Curiosidad): [Pregunta provocadora] o [Stat sorprendente]
+          Variante 3 (Urgencia): [Escasez] + [Consecuencia de no actuar]
+
+          === BODY ===
+          Hook (2-3 líneas): problema agudo del target, lenguaje visceral
+          Story/Proof (3-4 líneas): testimonio, caso de éxito o dato de credibilidad
+          Benefits (3 bullets):
+          - [Beneficio 1]: [Cómo se logra] → [Resultado tangible]
+          - [Beneficio 2]: [Cómo se logra] → [Resultado tangible]
+          - [Beneficio 3]: [Cómo se logra] → [Resultado tangible]
+          Objection handling (2 líneas): objeción común + refutación con proof
+
+          === CTA ===
+          Principal: [Acción clara] + [Beneficio inmediato] + [Urgencia sutil]
+          Secundaria: [Opción de bajo compromiso] (ej: "Ver demo sin registro")
+
+          REGLAS DURAS:
+          - Máximo 300 palabras total
+          - Segunda persona ("tú", "tu", "tuyo")
+          - Verbos de acción al inicio de bullets (Obtén, Descubre, Ahorra)
+          - Sin jerga técnica innecesaria
+          - 1 emoji máximo por sección
+          - Sin superlativos vacíos ("el mejor", "increíble", "revolucionario")
+
+          OUTPUT: Texto formateado con las secciones marcadas.
+
+        grounding_keywords: ["copy", "headline", "benefit", "cta", "conversion"]
+
+      documentation:
+        description: "Documentación técnica"
+        priority: 8
+
+        llm_prompt: |
+          Crea documentación técnica.
+
+          ESTRUCTURA:
+          1. Overview: qué hace, para quién, versión
+          2. Quick Start: instalación en 3 pasos
+          3. API Reference: endpoints/funciones con params, returns, errors
+          4. Examples: 3 casos de uso con código completo
+          5. Troubleshooting: 5 problemas comunes + solución
+          6. Changelog: versiones recientes
+
+          OUTPUT: Markdown con tablas y code blocks.
+
+        grounding_keywords: ["docs", "api", "reference", "example", "troubleshoot"]
+
+# =============================================================================
+# DOMINIO 11: DEVOPS & INFRASTRUCTURE
+# =============================================================================
+  11_devops_infrastructure:
+    description: "DevOps e infraestructura cloud"
+    icon: "⚙️"
+
+    archetypes:
+      ci-cd:
+        description: "Integración y despliegue continuo"
+        priority: 10
+
+        inputs:
+          provider:
+            type: str
+            default: "github_actions"
+
+        llm_prompt: |
+          Crea un pipeline CI/CD completo.
+
+          ARCHIVOS:
+          1. .github/workflows/ci.yml
+             - Trigger: push a main, pull_request
+             - Jobs:
+               * lint (flake8/eslint)
+               * test (pytest/jest, coverage >80%)
+               * build (Docker build + push)
+               * deploy (SSH + docker-compose)
+          2. Dockerfile (multi-stage: build → runtime)
+          3. docker-compose.yml (app + db + redis)
+          4. deploy.sh (backup, deploy, health check, rollback)
+
+          REGLAS DURAS:
+          - Caché de dependencias entre runs
+          - Secrets: GitHub Secrets, NO hardcoded
+          - Health check endpoint antes de marcar deploy como exitoso
+          - Notificaciones: Slack/Discord en caso de fallo
+          - Rollback automático si health check falla (últimas 3 versiones)
+
+          OUTPUT: Archivos listos para usar.
+
+        grounding_keywords: ["pipeline", "build", "test", "deploy", "docker"]
+
+      cloud-infrastructure:
+        description: "Infraestructura cloud con IaC"
+        priority: 10
+
+        inputs:
+          cloud_provider:
+            type: str
+            default: "aws"
+
+        llm_prompt: |
+          Crea infraestructura cloud con Terraform.
+
+          RECURSOS ({{ inputs.cloud_provider }}):
+          - VPC con 2 subnets (pública: 10.0.1.0/24, privada: 10.0.2.0/24)
+          - Internet Gateway + NAT Gateway
+          - Security Groups: web (80,443), ssh (22), db (3306)
+          - EC2/Compute: t3.micro (2 instancias, auto-scaling group)
+          - ALB/Load Balancer: health checks, SSL termination
+          - RDS/Database: PostgreSQL, multi-AZ, backups automáticos
+          - S3/Bucket: assets, logs, backups
+          - CloudWatch/Monitoring: alarms CPU >80%, disk >85%
+
+          OUTPUT: Archivos .tf + variables.tf + outputs.tf.
+
+        grounding_keywords: ["terraform", "vpc", "subnet", "security", "scaling"]
+
+      monitoring:
+        description: "Observabilidad y monitoreo"
+        priority: 9
+
+        llm_prompt: |
+          Crea un stack de monitoreo.
+
+          COMPONENTES:
+          - Prometheus: scraping de métricas
+          - Grafana: dashboards (infra, app, business)
+          - Loki: logs centralizados
+          - AlertManager: alertas por email/Slack/PagerDuty
+          - Jaeger: distributed tracing
+
+          DASHBOARDS:
+          1. Infrastructure: CPU, memory, disk, network
+          2. Application: request rate, latency, error rate, saturation
+          3. Business: signups, conversions, revenue
+
+          OUTPUT: Configs YAML + dashboards JSON.
+
+        grounding_keywords: ["monitor", "metric", "alert", "dashboard", "log"]
+
+# =============================================================================
+# DOMINIO 12: CYBERSECURITY
+# =============================================================================
+  12_cybersecurity:
+    description: "Ciberseguridad y pentesting"
+    icon: "🔒"
+
+    archetypes:
+      pentesting:
+        description: "Pruebas de penetración éticas"
+        priority: 10
+
+        inputs:
+          target_scope:
+            type: str
+            default: "web"
+
+        llm_prompt: |
+          Crea un framework de pentesting para {{ inputs.target_scope }}.
+
+          FASES:
+          1. Reconnaissance: OSINT, DNS enum, subdomain discovery
+          2. Scanning: port scan, service detection, vulnerability scan
+          3. Exploitation: ONLY theoretical, NO auto-exploit
+          4. Post-exploitation: pivoting, privilege escalation (theoretical)
+          5. Reporting: CVSS scoring, remediation, evidence
+
+          ARCHIVOS:
+          - recon.sh: nmap, whois, dnsenum
+          - scan.py: vuln scan with nikto/sqlmap templates
+          - report.md: executive summary + technical details
+
+          DISCLAIMER: "Este framework es para uso autorizado únicamente."
+
+          OUTPUT: Scripts + documentación.
+
+        grounding_keywords: ["pentest", "scan", "vulnerability", "exploit", "report"]
+
+      security-audit:
+        description: "Auditorías de seguridad"
+        priority: 9
+
+        llm_prompt: |
+          Crea una auditoría de seguridad.
+
+          CHECKLIST (100+ items):
+          - IAM: MFA, least privilege, password policy
+          - Network: segmentation, ACLs, encryption in transit
+          - Data: encryption at rest, backup, retention
+          - Application: OWASP Top 10, SAST/DAST
+          - Physical: access controls, environmental
+
+          OUTPUT: Reporte con findings (Critical/High/Medium/Low) + remediation.
+
+        grounding_keywords: ["audit", "checklist", "finding", "remediation", "compliance"]
+
+      compliance:
+        description: "Cumplimiento normativo"
+        priority: 8
+
+        llm_prompt: |
+          Crea un plan de cumplimiento.
+
+          FRAMEWORKS: ISO 27001, SOC2, GDPR, NIST
+
+          ENTREGABLES:
+          1. Gap analysis: controles actuales vs requeridos
+          2. Roadmap: 12 meses con milestones
+          3. Policies: 10 políticas base (access, crypto, incident, etc.)
+          4. Evidence templates: checklists, logs, reports
+          5. Training plan: awareness, phishing, secure coding
+
+          OUTPUT: Documentos en markdown.
+
+        grounding_keywords: ["compliance", "policy", "control", "gap", "framework"]
+
+# =============================================================================
+# DOMINIO 13: LEGAL COMPLIANCE
+# =============================================================================
+  13_legal_compliance:
+    description: "Legal y cumplimiento normativo"
+    icon: "⚖️"
+
+    archetypes:
+      contracts:
+        description: "Contratos y acuerdos legales"
+        priority: 10
+
+        llm_prompt: |
+          Genera un contrato.
+
+          CLÁUSULAS OBLIGATORIAS:
+          1. Partes: identificación completa
+          2. Objeto: qué se acuerda, alcance
+          3. Precio y pago: importe, forma, plazo, penalización
+          4. Obligaciones: de cada parte, entregables, plazos
+          5. Propiedad intelectual: quién retiene derechos
+          6. Confidencialidad: NDA integrado
+          7. Resolución: causas de terminación, preaviso
+          8. Ley aplicable y jurisdicción
+          9. Firmas: espacio para fecha y firma
+
+          PLACEHOLDERS: [EMPRESA_A], [EMPRESA_B], [IMPORTE], [PLAZO], [JURISDICCIÓN]
+
+          OUTPUT: Documento legal en markdown.
+
+        grounding_keywords: ["contract", "clause", "party", "term", "obligation"]
+
+      privacy:
+        description: "Políticas de privacidad"
+        priority: 10
+
+        llm_prompt: |
+          Genera una Política de Privacidad (GDPR/CCPA).
+
+          SECCIONES:
+          1. Identidad del Responsable: [EMPRESA], [DIRECCIÓN], [EMAIL], [DPO]
+          2. Datos recopilados: cuáles, cómo, por qué
+          3. Base legal: consentimiento, contrato, interés legítimo, obligación legal
+          4. Destinatarios: empleados, proveedores, autoridades
+          5. Transferencias: fuera UE (safeguards: SCC, adequacy)
+          6. Plazo: cuánto se conservan (ej: 5 años por obligación legal)
+          7. Derechos: acceso, rectificación, supresión, portabilidad, oposición, limitación
+          8. Derecho a reclamar: AEPD/authority contact
+          9. Decisiones automatizadas: perfilado, consecuencias, opt-out
+          10. Cambios: notificación, fecha última actualización
+
+          REGLAS:
+          - Lenguaje claro (art. 12 GDPR), NO legalese excesivo
+          - Nivel de lectura: 14 años
+          - Sin renuncias de derechos
+
+          OUTPUT: Markdown completo.
+
+        grounding_keywords: ["privacy", "data", "consent", "right", "gdpr"]
+
+      terms:
+        description: "Términos y condiciones"
+        priority: 9
+
+        llm_prompt: |
+          Genera Términos y Condiciones.
+
+          SECCIONES:
+          1. Definiciones: usuario, servicio, contenido, cuenta
+          2. Uso del servicio: licencia limitada, prohibiciones
+          3. Cuenta: registro, seguridad, terminación
+          4. Contenido: propiedad, licencia al usuario, moderación
+          5. Pagos: precios, facturación, reembolsos
+          6. Limitación de responsabilidad: fuerza mayor, daños indirectos
+          7. Indemnización: por uso indebido
+          8. Ley aplicable y jurisdicción
+          9. Modificaciones: notificación, aceptación tácita
+          10. Contacto: email, dirección postal
+
+          OUTPUT: Markdown completo.
+
+        grounding_keywords: ["terms", "user", "service", "liability", "termination"]
+
+# =============================================================================
+# CONFIGURACIÓN DE FALLBACK
+# =============================================================================
+fallbacks:
+  # Cuando ningún arquetipo matchea
+  generic-task:
+    description: "Tarea genérica no clasificada"
+    llm_prompt: |
+      El usuario ha solicitado una tarea que no encaja en ningún arquetipo definido.
+
+      INSTRUCCIONES:
+      1. Analiza la tarea cuidadosamente
+      2. Descompón en pasos manejables
+      3. Genera el entregable más apropiado
+      4. Si la tarea es ambigua, pide clarificación
+
+      OUTPUT: Según el tipo de tarea detectado.
+
+    thresholds:
+      min_confidence: 30
+      max_llm_calls: 3
+
+# =============================================================================
+# CALIBRACIÓN INICIAL (se actualiza con uso)
+# =============================================================================
+calibration:
+  # Umbrales iniciales por arquetipo
+  initial_thresholds:
+    "1_web_development.landing-page": 0.65
+    "1_web_development.ecommerce": 0.55
+    "1_web_development.saas-dashboard": 0.60
+    "2_software_development.api-development": 0.60
+    "9_data_science.ml-model": 0.55
+    "10_content_writing.blog-article": 0.70
+    "10_content_writing.copywriting": 0.65
+
+  # Factores de ajuste Brier
+  brier_learning_rate: 0.1
+  min_samples_for_calibration: 5
+
+  # Penalizaciones
+  overconfidence_penalty: 0.15
+  underconfidence_bonus: 0.05

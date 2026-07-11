@@ -4,6 +4,8 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
+import traceforge
+
 from cogniteam.config.settings import settings
 from cogniteam.tools.utils.llm import llm_complete
 
@@ -271,169 +273,6 @@ Interaction History: {history}
 Genera el JSON del world model ahora.
 """
 
-ARCHITECTURE_SPATIAL_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir restricciones estructurales"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: bim-modeling)
-Tarea: "Create a BIM model for a 3-story office building with structural, MEP, and architectural layers."
-{{
-  "trajectory": "1) Set up BIM project with shared coordinates and levels. 2) Model structural grid and load-bearing elements. 3) Add architectural walls, floors, roofs with material parameters. 4) Integrate MEP systems with clash detection setup. 5) Generate quantity takeoffs and LOD 300 documentation.",
-  "gap": "No structural engineering calculations, MEP load requirements, or local building code references provided. Site context model missing.",
-  "confidence": 55,
-  "keywords": ["bim", "structural", "mep", "clash-detection", "lod-300"],
-  "analysis": "BIM workflow is standard but absence of engineering inputs and code references may invalidate the model for permit submission."
-}}
-
-Ejemplo 2 (Arquetipo: render-visualization)
-Tarea: "Produce photorealistic exterior renderings for a modern villa project with daytime and night scenes."
-{{
-  "trajectory": "1) Import and clean 3D model with proper material IDs. 2) Set up PBR materials and texture mapping. 3) Configure HDRI lighting for daytime and artificial for night. 4) Place cameras with composition rules. 5) Render passes and composite final images.",
-  "gap": "No 3D model file, material references, or landscape context provided. Output resolution and delivery format unspecified.",
-  "confidence": 50,
-  "keywords": ["pbr-materials", "hdr-lighting", "cameras", "render-passes", "compositing"],
-  "analysis": "Render pipeline is well-understood but missing source model and material references make the final quality entirely dependent on assumptions."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-MARKETING_GROWTH_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir segmentos de audiencia"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: campaign-launch)
-Tarea: "Launch a multi-channel ad campaign for a new D2C skincare product targeting women 25-40."
-{{
-  "trajectory": "1) Define campaign KPIs and budget allocation per channel. 2) Create ad creative variants (visuals + copy) for Meta, Google, TikTok. 3) Set up tracking pixels and conversion API. 4) Configure audience segments with lookalike targeting. 5) Launch with A/B testing and monitoring dashboard.",
-  "gap": "No product photos, ad copy, or landing page URL provided. Daily budget and start date not specified.",
-  "confidence": 45,
-  "keywords": ["ad-creatives", "audience-segments", "conversion-tracking", "ab-testing", "kpi"],
-  "analysis": "Campaign structure is correct but without creative assets and copy the launch is blocked. Audience definition is too broad for efficient spend."
-}}
-
-Ejemplo 2 (Arquetipo: seo-content-strategy)
-Tarea: "Develop an SEO content strategy for a SaaS project management tool targeting SMBs."
-{{
-  "trajectory": "1) Perform keyword research with competitor gap analysis. 2) Build topical cluster map and content calendar. 3) Write cornerstone articles for high-volume terms. 4) Implement technical SEO recommendations (schema, internal linking). 5) Track rankings and iterate based on performance.",
-  "gap": "No product USPs, pricing page, or competitor list provided. Target geography and language undefined.",
-  "confidence": 55,
-  "keywords": ["keyword-research", "content-clusters", "seo", "schema-markup", "rankings"],
-  "analysis": "SEO methodology is sound but missing product positioning inputs may lead to targeting terms that don't convert."
-}}
-
-Ejemplo 3 (Arquetipo: automation-emailing)
-Tarea: "Set up an automated email sequence for abandoned cart recovery in an e-commerce store."
-{{
-  "trajectory": "1) Define trigger events and user segments for the workflow. 2) Write email sequence with 3-step follow-up logic. 3) Design responsive email templates with dynamic product placeholders. 4) Configure DKIM/SPF for deliverability. 5) Set up analytics to track open and conversion rates.",
-  "gap": "No product catalog API, brand email templates, or sending platform account provided. Discount strategy for recovery not specified.",
-  "confidence": 60,
-  "keywords": ["email-sequence", "trigger-events", "dynamic-content", "deliverability", "analytics"],
-  "analysis": "Standard abandoned cart flow is well-defined but missing creative assets and incentive strategy reduce conversion potential."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-AUDIOVISUAL_MANAGEMENT_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir estrategia de gancho inicial"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: video-production)
-Tarea: "Produce a 60-second promotional video for a mobile game launch targeting Gen Z on TikTok."
-{{
-  "trajectory": "1) Develop hook strategy within first 3 seconds for retention. 2) Write script with visual storyboard and timing. 3) Record voiceover or source music track. 4) Edit timeline with pacing optimized for platform. 5) Color grade, normalize audio to -14 LUFS, and export.",
-  "gap": "No game footage, brand assets, or script outline provided. Platform aspect ratio (vertical/horizontal) not specified.",
-  "confidence": 45,
-  "keywords": ["hook-strategy", "storyboard", "editing", "audio-normalization", "color-grading"],
-  "analysis": "Production pipeline is clear but missing source footage and script make this impossible to execute as specified."
-}}
-
-Ejemplo 2 (Arquetipo: business-operations)
-Tarea: "Create an operational dashboard tracking KPIs for a video production agency with sprint-based workflows."
-{{
-  "trajectory": "1) Define KPI tree across sales, production, and delivery. 2) Build sprint tracking system with milestone checkpoints. 3) Integrate timesheet and budget burn data. 4) Design dashboard views for producers and executives. 5) Set up automated weekly reporting via webhook.",
-  "gap": "No existing data sources, team structure, or current baseline metrics provided. Tooling preferences for the dashboard unknown.",
-  "confidence": 60,
-  "keywords": ["kpi-dashboard", "sprints", "timesheet", "budget-tracking", "reporting"],
-  "analysis": "Operational framework is standard but without data integration points the dashboard will remain a shell."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
 GAME_DEV_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
 
 Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
@@ -495,310 +334,6 @@ Interaction History: {history}
 Genera el JSON del world model ahora.
 """
 
-DATA_SCIENCE_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir métricas de evaluación"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: exploratory-analysis)
-Tarea: "Perform exploratory data analysis on a customer churn dataset to identify key drivers."
-{{
-  "trajectory": "1) Load and profile dataset for missing values and distributions. 2) Create univariate and bivariate visualizations. 3) Analyze correlations between features and churn flag. 4) Segment customers by behavioral clusters. 5) Document findings with actionable recommendations.",
-  "gap": "No dataset provided, column descriptions, or business context for churn definition. Time period of analysis not specified.",
-  "confidence": 40,
-  "keywords": ["eda", "visualizations", "correlation", "segmentation", "churn-analysis"],
-  "analysis": "Analysis methodology is correct but without data or business context the output will be generic and not actionable."
-}}
-
-Ejemplo 2 (Arquetipo: ml-modeling)
-Tarea: "Train a classification model to predict loan default risk with interpretable features."
-{{
-  "trajectory": "1) Perform feature engineering and selection from raw data. 2) Split data with stratified sampling for class imbalance. 3) Train baseline models (logistic regression, XGBoost). 4) Tune hyperparameters with cross-validation. 5) Evaluate with precision/recall and generate SHAP explanations.",
-  "gap": "No dataset, target definition, or feature schema provided. Acceptable false positive rate not specified.",
-  "confidence": 45,
-  "keywords": ["classification", "feature-engineering", "xgboost", "hyperparameter-tuning", "shap"],
-  "analysis": "Standard ML pipeline is well-defined but missing data and business constraints make model quality unpredictable."
-}}
-
-Ejemplo 3 (Arquetipo: etl-pipeline)
-Tarea: "Build an ETL pipeline that ingests sales data from CSV, transforms it, and loads into PostgreSQL."
-{{
-  "trajectory": "1) Define source schema and target table structure. 2) Set up Airflow DAG with ingestion task. 3) Implement transformation logic for cleaning and aggregation. 4) Add data quality checks and error handling. 5) Schedule incremental loads with backfill strategy.",
-  "gap": "No sample CSV files, target database credentials, or transformation rules provided. Incremental load key not identified.",
-  "confidence": 55,
-  "keywords": ["etl", "airflow", "postgresql", "data-quality", "incremental-load"],
-  "analysis": "Pipeline architecture is solid but missing source data samples and transformation specs will require iterative refinement."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-CONTENT_WRITING_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir tono y voz"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: technical-documentation)
-Tarea: "Write API documentation for a payment gateway REST API targeting third-party developers."
-{{
-  "trajectory": "1) Review API endpoints, request/response schemas, and authentication flow. 2) Write endpoint reference with parameters and examples. 3) Create integration guides for common scenarios. 4) Add error code reference and troubleshooting section. 5) Review for technical accuracy and publish to developer portal.",
-  "gap": "No API specification, endpoint list, or authentication details provided. Target developer experience level unknown.",
-  "confidence": 50,
-  "keywords": ["api-docs", "endpoints", "integration-guide", "error-codes", "developer-portal"],
-  "analysis": "Documentation structure is standard but without API specs the content will be placeholder-level only."
-}}
-
-Ejemplo 2 (Arquetipo: copywriting-marketing)
-Tarea: "Write landing page copy for a SaaS project management tool focused on remote teams."
-{{
-  "trajectory": "1) Define unique value proposition and key differentiators. 2) Draft headline and subheadline with AIDA structure. 3) Write feature sections with benefit-driven copy. 4) Craft CTAs and social proof elements. 5) Optimize for readability and SEO keywords.",
-  "gap": "No product features list, pricing information, or customer testimonials provided. Target audience persona undefined.",
-  "confidence": 55,
-  "keywords": ["value-proposition", "aida", "cta", "benefit-copy", "social-proof"],
-  "analysis": "Copywriting methodology is correct but missing product inputs will result in generic messaging that fails to differentiate."
-}}
-
-Ejemplo 3 (Arquetipo: blog-article)
-Tarea: "Write a 2000-word blog article about AI trends in healthcare for a B2B audience."
-{{
-  "trajectory": "1) Research current AI healthcare trends and statistics. 2) Outline article with H1/H2 structure and keyword placement. 3) Write introduction with hook and thesis statement. 4) Develop body sections with evidence and examples. 5) Review readability and optimize for SEO.",
-  "gap": "No specific angle, target keywords, or source materials provided. Company brand voice guidelines unavailable.",
-  "confidence": 60,
-  "keywords": ["blog-writing", "seo", "readability", "outline", "research"],
-  "analysis": "Article structure is straightforward but without a defined angle the content may lack focus and authority."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-DEVOPS_INFRASTRUCTURE_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir pipeline de CI/CD"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: ci-cd-pipeline)
-Tarea: "Set up a CI/CD pipeline for a microservices project with automated testing and deployment to staging."
-{{
-  "trajectory": "1) Define build stages: lint, test, build, deploy. 2) Configure GitHub Actions workflow with matrix builds. 3) Set up Docker image building and registry push. 4) Implement staging deployment with health check verification. 5) Add rollback mechanism and notification hooks.",
-  "gap": "No repository URL, test framework, or Dockerfile provided. Staging environment credentials and URL not specified.",
-  "confidence": 55,
-  "keywords": ["github-actions", "docker", "ci-cd", "deployment", "health-check"],
-  "analysis": "Pipeline structure is standard but missing repository and environment access make this a template rather than an executable plan."
-}}
-
-Ejemplo 2 (Arquetipo: kubernetes-deployment)
-Tarea: "Deploy a set of microservices to a Kubernetes cluster with ingress, service mesh, and autoscaling."
-{{
-  "trajectory": "1) Design namespace structure and resource quotas. 2) Write Kubernetes manifests for deployments and services. 3) Configure ingress controller with TLS termination. 4) Set up service mesh with Istio for traffic management. 5) Implement HPA autoscaling based on CPU/memory metrics.",
-  "gap": "No container images, cluster access credentials, or service discovery requirements provided. Ingress domain and TLS cert source unknown.",
-  "confidence": 50,
-  "keywords": ["kubernetes", "ingress", "service-mesh", "hpa", "manifests"],
-  "analysis": "K8s deployment pattern is correct but missing container artifacts and cluster context make this a theoretical exercise."
-}}
-
-Ejemplo 3 (Arquetipo: terraform-infra)
-Tarea: "Provision AWS infrastructure with Terraform including VPC, EC2, RDS, and S3 for a web application."
-{{
-  "trajectory": "1) Define Terraform module structure and remote state backend. 2) Create VPC with public/private subnets and NAT gateway. 3) Provision EC2 instances with auto-scaling group. 4) Set up RDS PostgreSQL with read replica. 5) Configure S3 buckets with lifecycle policies and IAM roles.",
-  "gap": "No AWS account ID, region preference, or instance sizing provided. VPC CIDR range and high-availability requirements undefined.",
-  "confidence": 60,
-  "keywords": ["terraform", "aws", "vpc", "rds", "infrastructure-as-code"],
-  "analysis": "Infrastructure pattern is well-established but missing sizing and regional inputs may lead to costly provisioning mistakes."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-CYBERSECURITY_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir alcance de auditoría"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: security-audit)
-Tarea: "Conduct a security audit for a web application following OWASP Top 10 methodology."
-{{
-  "trajectory": "1) Define audit scope and interview stakeholders. 2) Perform automated scanning with OWASP ZAP. 3) Manual review of authentication, session management, and access controls. 4) Test input validation and injection points. 5) Document findings with severity ratings and remediation recommendations.",
-  "gap": "No target application URL, credentials for authenticated scanning, or source code access provided. Audit timeline and compliance framework not specified.",
-  "confidence": 45,
-  "keywords": ["owasp", "security-audit", "vulnerability-scanning", "penetration-test", "remediation"],
-  "analysis": "Audit methodology is comprehensive but without target access the assessment cannot begin. Effort estimation is impossible without scope clarity."
-}}
-
-Ejemplo 2 (Arquetipo: penetration-testing)
-Tarea: "Perform a penetration test on a corporate network to identify exploitable vulnerabilities."
-{{
-  "trajectory": "1) Perform reconnaissance and footprinting of target IP ranges. 2) Scan open ports and enumerate services. 3) Attempt exploitation of identified vulnerabilities. 4) Attempt privilege escalation and lateral movement. 5) Document findings with proof-of-concept and risk assessment.",
-  "gap": "No target IP ranges, rules of engagement, or authorization letter provided. Testing window and exclusion list not defined.",
-  "confidence": 35,
-  "keywords": ["reconnaissance", "exploitation", "privilege-escalation", "pentest", "risk-assessment"],
-  "analysis": "Technical approach is standard but without authorization and scope this engagement is both impossible and unethical to execute."
-}}
-
-Ejemplo 3 (Arquetipo: compliance-hardening)
-Tarea: "Harden a Linux server fleet to meet CIS Benchmark Level 2 compliance."
-{{
-  "trajectory": "1) Assess current configuration against CIS benchmarks. 2) Apply kernel parameter hardening and disable unused services. 3) Configure file permissions and audit logging. 4) Implement SSH hardening and PAM configuration. 5) Automate compliance scanning with OpenSCAP and generate report.",
-  "gap": "No server inventory, OS versions, or current baseline configuration provided. Exception policy for production-impacting changes not defined.",
-  "confidence": 55,
-  "keywords": ["cis-benchmark", "hardening", "openscap", "audit-logging", "compliance"],
-  "analysis": "Hardening playbook is well-established but without server inventory and OS diversity assessment, the effort is unpredictable."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
-
-LEGAL_COMPLIANCE_WORLD_MODEL_PROMPT = """Eres la capa "World Model" dentro del Planner Agent de CogniTeam.
-
-Tu trabajo NO es ejecutar la tarea, sino SIMULAR la trayectoria futura si se sigue el plan,
-identificar gaps en el estado actual, y estimar la probabilidad de éxito.
-
-REGLAS CRÍTICAS:
-1. NO SPOILERS: Usa placeholders abstractos (ej. "definir jurisdicción aplicable"), NO valores específicos de la tarea a menos que se hayan dado explícitamente.
-2. SÉ ESPECÍFICO: En la Trajectory, indica hitos concretos, evita frases genéricas como "hacer el trabajo".
-3. CALIBRACIÓN DE CONFIANZA: Sé honesto. Si la tarea carece de inputs críticos, la confianza debe ser baja.
-4. KEYWORDS: Extrae hasta 5 términos que DEBEN aparecer en la ejecución real para considerar el plan anclado.
-
-FORMATO OUTPUT (JSON estricto):
-{{
-  "trajectory": "Roadmap paso a paso...",
-  "gap": "Por qué el estado actual es insuficiente...",
-  "confidence": 0-100 (entero),
-  "keywords": ["keyword1", "keyword2", ...],
-  "analysis": "Evaluación del plan..."
-}}
-
---- EJEMPLOS ---
-
-Ejemplo 1 (Arquetipo: privacy-policy)
-Tarea: "Draft a privacy policy for a mobile health tracking app compliant with GDPR and CCPA."
-{{
-  "trajectory": "1) Identify all data collection points and processing purposes. 2) Draft data categories, legal basis, and retention periods. 3) Write user rights section with exercise procedures. 4) Add international transfer safeguards and third-party disclosures. 5) Include version history and effective date.",
-  "gap": "No company legal name, registered address, or data processor list provided. Health data classification under GDPR Art 9 not addressed.",
-  "confidence": 50,
-  "keywords": ["privacy-policy", "gdpr", "ccpa", "data-categories", "user-rights"],
-  "analysis": "Policy structure is standard but missing company details and health data classification create legal exposure if incorrect."
-}}
-
-Ejemplo 2 (Arquetipo: terms-of-service)
-Tarea: "Draft terms of service for a SaaS platform with subscription billing and user-generated content."
-{{
-  "trajectory": "1) Define service description and account terms. 2) Draft payment, cancellation, and refund policies. 3) Write user conduct and content ownership clauses. 4) Include limitation of liability and disclaimers. 5) Add dispute resolution and governing law provisions.",
-  "gap": "No company details, pricing model, or jurisdiction for governing law provided. UGC moderation policy undefined.",
-  "confidence": 55,
-  "keywords": ["terms-of-service", "subscription", "user-content", "liability", "governing-law"],
-  "analysis": "ToS framework is complete but missing business model inputs will result in generic clauses that may not protect the company adequately."
-}}
-
-Ejemplo 3 (Arquetipo: data-processing-agreement)
-Tarea: "Draft a Data Processing Agreement between a SaaS company and its customers under GDPR Article 28."
-{{
-  "trajectory": "1) Identify processing purposes and data categories. 2) Draft controller and processor obligations. 3) Include subprocessor authorization mechanism. 4) Add data breach notification procedures. 5) Incorporate SCCs for international transfers if applicable.",
-  "gap": "No company names, processing activities description, or subprocessor list provided. International transfer mechanisms not specified.",
-  "confidence": 60,
-  "keywords": ["dpa", "data-processing", "gdpr-art-28", "subprocessors", "scc"],
-  "analysis": "DPA structure is well-defined by regulation, but missing party details and processing descriptions make this a template rather than a usable agreement."
-}}
-
---- TAREA A SIMULAR ---
-Domain: {domain}
-Archetype: {archetype}
-Task Description: {task_description}
-Interaction History: {history}
-
-Genera el JSON del world model ahora.
-"""
 
 # Prompts específicos por dominio. Cada entrada puede reemplazar al prompt genérico.
 # Las claves son los domain_key del sistema (ej. "1_web_development").
@@ -807,15 +342,7 @@ DOMAIN_WORLD_MODEL_PROMPTS: Dict[str, str] = {
     "2_software_development": SOFTWARE_DEV_WORLD_MODEL_PROMPT,
     "3_education": EDUCATION_WORLD_MODEL_PROMPT,
     "4_graphic_design": GRAPHIC_DESIGN_WORLD_MODEL_PROMPT,
-    "5_architecture_spatial": ARCHITECTURE_SPATIAL_WORLD_MODEL_PROMPT,
-    "6_marketing_growth": MARKETING_GROWTH_WORLD_MODEL_PROMPT,
-    "7_audiovisual_management": AUDIOVISUAL_MANAGEMENT_WORLD_MODEL_PROMPT,
     "8_game_development": GAME_DEV_WORLD_MODEL_PROMPT,
-    "9_data_science": DATA_SCIENCE_WORLD_MODEL_PROMPT,
-    "10_content_writing": CONTENT_WRITING_WORLD_MODEL_PROMPT,
-    "11_devops_infrastructure": DEVOPS_INFRASTRUCTURE_WORLD_MODEL_PROMPT,
-    "12_cybersecurity": CYBERSECURITY_WORLD_MODEL_PROMPT,
-    "13_legal_compliance": LEGAL_COMPLIANCE_WORLD_MODEL_PROMPT,
 }
 
 # Keywords de grounding por defecto por arquetipo (desde cogniteam_archetypes.yaml)
@@ -843,50 +370,12 @@ GROUNDING_KEYWORDS_FALLBACK: Dict[str, List[str]] = {
     "branding-identity": ["branding", "logo", "color-palette", "typography", "identity", "guidelines", "tokens"],
     "editorial-layout": ["editorial", "layout", "grid", "typography", "magazine", "print", "spreads"],
     "ui-ux-prototyping": ["ui", "ux", "prototype", "wireframes", "mockups", "figma", "user-flow"],
-    # --- 5_architecture_spatial ---
-    "bim-modeling": ["bim", "revit", "archicad", "structural", "lod", "clash-detection", "mep"],
-    "render-visualization": ["render", "visualization", "unreal-engine", "v-ray", "pbr", "lighting", "photorealistic"],
-    # --- 6_marketing_growth ---
-    "campaign-launch": ["campaign", "ads", "audience", "conversion", "creatives", "tracking", "ab-testing"],
-    "seo-content-strategy": ["seo", "keywords", "content-strategy", "clusters", "rankings", "backlinks", "schema"],
-    "automation-emailing": ["email", "automation", "sequences", "deliverability", "segments", "triggers", "analytics"],
-    # --- 7_audiovisual_management ---
-    "video-production": ["video", "production", "editing", "storyboard", "audio", "color-grading", "lufs"],
-    "business-operations": ["operations", "kpis", "sprints", "dashboard", "budget", "milestones", "reporting"],
     # --- 8_game_development ---
     "mobile-casual": ["mobile-game", "casual", "unity", "2d", "ads", "procedural", "touch-input"],
     "pc-console": ["pc-game", "console", "unreal-engine", "open-world", "combat", "animation", "hdrp"],
     "multiplayer-online": ["multiplayer", "netcode", "photon", "dedicated-server", "matchmaking", "anti-cheat", "replication"],
     "vr-ar": ["vr", "ar", "openxr", "hand-tracking", "haptics", "room-scale", "stereoscopic"],
     "game-tools": ["game-tools", "editor", "automation", "pipeline", "procedural", "workflow", "python-scripting"],
-    # --- 9_data_science ---
-    "exploratory-analysis": ["eda", "pandas", "visualization", "statistics", "correlation", "cleaning", "profiling"],
-    "ml-modeling": ["ml-model", "classification", "regression", "pytorch", "xgboost", "hyperparameters", "shap"],
-    "dashboard-reporting": ["dashboard", "streamlit", "grafana", "kpi", "visualization", "metrics", "real-time"],
-    "etl-pipeline": ["etl", "airflow", "pipeline", "data-warehouse", "dbt", "incremental", "data-quality"],
-    "ab-testing": ["ab-testing", "experiment", "hypothesis", "statistics", "significance", "metrics", "segmentation"],
-    # --- 10_content_writing ---
-    "technical-documentation": ["documentation", "api-docs", "markdown", "guide", "tutorial", "technical-writing", "openapi"],
-    "copywriting-marketing": ["copywriting", "marketing", "aida", "cta", "landing-page-copy", "conversion", "brand-voice"],
-    "blog-article": ["blog", "article", "seo", "writing", "readability", "outline", "research"],
-    "translation-localization": ["translation", "localization", "i18n", "l10n", "glossary", "locale", "internationalization"],
-    "ux-writing": ["ux-writing", "microcopy", "interface", "usability", "error-messages", "onboarding", "plain-language"],
-    # --- 11_devops_infrastructure ---
-    "ci-cd-pipeline": ["ci-cd", "github-actions", "gitlab-ci", "jenkins", "docker", "automation", "deployment"],
-    "kubernetes-deployment": ["kubernetes", "k8s", "helm", "istio", "ingress", "hpa", "namespaces"],
-    "terraform-infra": ["terraform", "iac", "aws", "azure", "gcp", "state-backend", "provisioning"],
-    "monitoring-observability": ["monitoring", "prometheus", "grafana", "loki", "alerting", "observability", "slo"],
-    "disaster-recovery": ["disaster-recovery", "backup", "rto", "rpo", "failover", "velero", "high-availability"],
-    # --- 12_cybersecurity ---
-    "security-audit": ["security-audit", "owasp", "vulnerability", "scanning", "compliance", "remediation", "sarif"],
-    "penetration-testing": ["penetration-test", "pentest", "exploitation", "reconnaissance", "burpsuite", "metasploit", "risk-assessment"],
-    "compliance-hardening": ["hardening", "cis-benchmark", "compliance", "nist", "openscap", "secure-config", "audit-logging"],
-    "incident-response": ["incident-response", "security-incident", "forensics", "containment", "playbook", "wazuh", "thehive"],
-    # --- 13_legal_compliance ---
-    "privacy-policy": ["privacy-policy", "gdpr", "ccpa", "data-protection", "user-rights", "cookies", "data-categories"],
-    "terms-of-service": ["terms-of-service", "tos", "conditions", "liability", "governing-law", "subscription", "disclaimer"],
-    "compliance-checklist": ["compliance-checklist", "audit", "iso-27001", "soc2", "controls", "evidence", "remediation"],
-    "data-processing-agreement": ["dpa", "data-processing", "gdpr-art-28", "subprocessors", "scc", "controller", "processor"],
 }
 
 
@@ -934,14 +423,38 @@ def generate_world_model(
             result["keywords"] = GROUNDING_KEYWORDS_FALLBACK.get(archetype, [])
         print(f"  [World Model] Confianza: {result['confidence']}% | Keywords: {result['keywords'][:3]}...")
         return result
-    print("  [World Model] No se pudo extraer JSON.")
+    print(f"  [World Model] No se pudo extraer JSON. Respuesta: {raw[:400]}...")
     return None
 
 
 # --- Few-shot examples por dominio ---
 # Cada entrada es el ejemplo que se inyecta en PLANNER_INSTRUCTION_TEMPLATE.
 # Solo se muestra UN ejemplo por ejecución (el del dominio actual).
-FEWSHOT_UI = """EJEMPLO (UI + Contenido — landing page enlazada a blog.md):
+FEWSHOT_EDUCATION = """EJEMPLO (Educación - plataforma de curso online):
+{"steps":[
+  {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Buscar recursos educativos sobre el tema solicitado", "tool_to_use":"web_search_real", "inputs":{"query":"contenido didactico sobre el tema de la tarea", "num_results":5}, "output_variable_name":"recursos", "expected_output_format":"json"},
+  {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar estructura del curso con modulos y lecciones", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Estructura de curso con modulos, lecciones, objetivos de aprendizaje y recursos basado en {{recursos}}"}, "output_variable_name":"estructura_curso", "expected_output_format":"text"},
+  {"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML de pagina de curso con progreso", "tool_to_use":"generate_ui_code", "inputs":{"description":"Pagina de curso online con {{estructura_curso}}. Incluye header, modulo de lecciones con expansion, barra de progreso y seccion de materiales"}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":4, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS moderno responsive para plataforma educativa", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS moderno responsive con modo claro/oscuro, tipografia legible, cards de lecciones con expansion, barra de progreso animada"}, "output_variable_name":"css_code", "expected_output_format":"css"},
+  {"step":5, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar assets en curso.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"curso.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
+]}"""
+
+FEWSHOT_GRAPHIC_DESIGN = """EJEMPLO (Diseño Gráfico - portafolio de identidad visual):
+{"steps":[
+  {"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML con portafolio de identidad visual", "tool_to_use":"generate_ui_code", "inputs":{"description":"Pagina de portafolio de diseno grafico mostrando identidad visual, paleta de colores, tipografia y aplicaciones de marca"}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS con diseno editorial moderno", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS con diseno editorial, tipografia expresiva, grid de portafolio, animaciones sutiles y paleta cromatica de marca"}, "output_variable_name":"css_code", "expected_output_format":"css"},
+  {"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar assets en portfolio.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"portfolio.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
+]}"""
+
+FEWSHOT_GAME_DEV = """EJEMPLO (Game Development - juego canvas autocontenido con validacion funcional):
+{"steps":[
+  {"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML autocontenido del juego (CSS in `<style>` en <head>, JS in `<script>` al final del <body>)", "tool_to_use":"generate_ui_code", "inputs":{"description":"Archivo HTML UNICO y autocontenido. CSS va en <style> dentro del <head>. JS va en <script> al FINAL del <body> (despues de todos los elementos HTML). El script NO debe asumir elementos que no existen en el HTML. Toda la logica (game loop, input, colisiones, puntuacion) va en ese unico script. NO generar HTML, CSS y JS por separado — todo en un solo archivo."}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Persistir el HTML a juego.html", "tool_to_use":"write_file_sandboxed", "inputs":{"relative_filepath":"juego.html", "content":"{{html_code}}"}, "output_variable_name":"archivo_html", "expected_output_format":"text"},
+  {"step":3, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar test funcional JS", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Script JS que inyectar via validate_html_functional. Verifica: canvas existe, sin errores consola, simula interaccion y verifica puntuacion valida. Retorna dict con resultados."}, "output_variable_name":"test_script", "expected_output_format":"text"},
+  {"step":4, "agent":"DeveloperAgent_CogniTeam", "action_description":"Validar funcionalidad del juego en navegador", "tool_to_use":"validate_html_functional", "inputs":{"filepath":"juego.html", "test_script":"{{test_script}}", "capture_screenshot":true}, "output_variable_name":"validacion", "expected_output_format":"json"}
+]}"""
+
+FEWSHOT_UI = """EJEMPLO (UI + Contenido - landing page enlazada a blog.md):
 {"steps":[
   {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Buscar URLs de papers recientes", "tool_to_use":"web_search_real", "inputs":{"query":"tres papers mas recientes sobre el tema solicitado", "num_results":5}, "output_variable_name":"urls_encontradas", "expected_output_format":"json"},
   {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Navegar cada URL para obtener detalles completos de cada paper", "tool_to_use":"browse_web_page", "inputs":{"url":"{{urls_encontradas}}"}, "output_variable_name":"detalle_completo", "expected_output_format":"text"},
@@ -953,12 +466,23 @@ FEWSHOT_UI = """EJEMPLO (UI + Contenido — landing page enlazada a blog.md):
   {"step":8, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en index.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"index.html"}, "output_variable_name":"html_final", "expected_output_format":"html"}
 ]}"""
 
-FEWSHOT_SCRIPT = """EJEMPLO (Scripting — cadena genera→escribe→ejecuta→verifica):
+FEWSHOT_SCRIPT = """EJEMPLO (Scripting - cadena genera→escribe→ejecuta→verifica):
 {"steps":[
   {"step":1, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar script Python para analizar datos y producir output", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Script Python que procesa datos y genera resultados"}, "output_variable_name":"script_generado", "expected_output_format":"text"},
   {"step":2, "agent":"DeveloperAgent_CogniTeam", "action_description":"Escribir el script a disco", "tool_to_use":"write_file_sandboxed", "inputs":{"relative_filepath":"script.py", "content":"{{script_generado}}"}, "output_variable_name":"archivo_escrito", "expected_output_format":"text"},
   {"step":3, "agent":"DeveloperAgent_CogniTeam", "action_description":"Ejecutar el script para validar que funciona", "tool_to_use":"execute_terminal_command_safe", "inputs":{"command":"python3 script.py"}, "output_variable_name":"ejecucion", "expected_output_format":"text"},
   {"step":4, "agent":"DeveloperAgent_CogniTeam", "action_description":"Verificar que los archivos generados existen", "tool_to_use":"list_files_sandboxed", "inputs":{"relative_dirpath":"."}, "output_variable_name":"verificacion", "expected_output_format":"text"}
+]}
+
+EJEMPLO (HTML + testing - genera HTML, valida con navegador):
+{"steps":[
+  {"step":1, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar HTML del juego", "tool_to_use":"generate_ui_code", "inputs":{"description":"Juego space shooter en canvas con nave, enemigos, puntuacion y game over"}, "output_variable_name":"html_code", "expected_output_format":"html"},
+  {"step":2, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar CSS", "tool_to_use":"generate_css_code", "inputs":{"description":"CSS moderno responsive"}, "output_variable_name":"css_code", "expected_output_format":"css"},
+  {"step":3, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Generar JS del juego", "tool_to_use":"generate_js_code", "inputs":{"description":"JS del juego con game loop, input handling, colisiones y puntuacion"}, "output_variable_name":"js_code", "expected_output_format":"js"},
+  {"step":4, "agent":"UIDesignerAgent_CogniTeam", "action_description":"Combinar HTML, CSS y JS en juego.html", "tool_to_use":"combine_ui_to_html", "inputs":{"html":"{{html_code}}", "css":"{{css_code}}", "js":"{{js_code}}", "filepath":"juego.html"}, "output_variable_name":"html_final", "expected_output_format":"html"},
+  {"step":5, "agent":"DeveloperAgent_CogniTeam", "action_description":"Generar test funcional JS para el juego", "tool_to_use":"generate_textual_artifact", "inputs":{"description_of_artifact":"Script JS que se inyectara en el HTML via validate_html_functional. Debe verificar: (1) que existe un elemento canvas, (2) que no hay errores JS en consola, (3) simular teclas y verificar que la puntuacion es un numero valido. Debe retornar un dict con los resultados."}, "output_variable_name":"test_script", "expected_output_format":"text"},
+  {"step":6, "agent":"DeveloperAgent_CogniTeam", "action_description":"Ejecutar validacion funcional del HTML con el test script", "tool_to_use":"validate_html_functional", "inputs":{"filepath":"juego.html", "test_script":"{{test_script}}", "capture_screenshot":true}, "output_variable_name":"validacion", "expected_output_format":"json"},
+  {"step":7, "agent":"DeveloperAgent_CogniTeam", "action_description":"Verificar resultado de validacion", "tool_to_use":"execute_terminal_command_safe", "inputs":{"command":"python3 -c \\\"import json; r=json.loads('{{validacion}}'); assert r.get('passed'), f'Validacion fallo: {r.get(\\\"test_results\\\", {})}'\\\" && echo 'VALIDACION OK'"}, "output_variable_name":"verificacion_test", "expected_output_format":"text"}
 ]}"""
 
 FEWSHOT_CONTENT = """EJEMPLO (Generación de contenido):
@@ -970,17 +494,9 @@ FEWSHOT_CONTENT = """EJEMPLO (Generación de contenido):
 DOMAIN_FEWSHOT_EXAMPLES: Dict[str, str] = {
     "1_web_development": FEWSHOT_UI,
     "2_software_development": FEWSHOT_SCRIPT,
-    "3_education": FEWSHOT_CONTENT,
-    "4_graphic_design": FEWSHOT_CONTENT,
-    "5_architecture_spatial": FEWSHOT_CONTENT,
-    "6_marketing_growth": FEWSHOT_CONTENT,
-    "7_audiovisual_management": FEWSHOT_CONTENT,
-    "8_game_development": FEWSHOT_SCRIPT,
-    "9_data_science": FEWSHOT_SCRIPT,
-    "10_content_writing": FEWSHOT_CONTENT,
-    "11_devops_infrastructure": FEWSHOT_SCRIPT,
-    "12_cybersecurity": FEWSHOT_CONTENT,
-    "13_legal_compliance": FEWSHOT_CONTENT,
+    "3_education": FEWSHOT_EDUCATION,
+    "4_graphic_design": FEWSHOT_GRAPHIC_DESIGN,
+    "8_game_development": FEWSHOT_GAME_DEV,
 }
 
 PLANNER_INSTRUCTION_TEMPLATE = """Eres un Planificador Senior IA. Genera un plan JSON detallado paso a paso.
@@ -997,9 +513,13 @@ REGLAS:
 9. validate_script valida sintaxis SOLO para scripts bash. NO funciona para Python. Para Python usa execute_terminal_command_safe directamente.
 10. generate_textual_artifact genera contenido SOLO EN MEMORIA. Siempre usa write_file_sandboxed despues para persistirlo a disco.
 11. Para tareas que requieran ejecutar scripts, la cadena completa es: generate_textual_artifact (crear) → write_file_sandboxed (persistir) → execute_terminal_command_safe (ejecutar) → list_files_sandboxed (verificar output).
-12. IMPORTANTE: Encadena datos entre pasos usando {{{{output_variable_name}}}} en los inputs. Si el paso 2 extrae informacion (ej: {{{{paper_info}}}}), pasala al paso 3 como "description": "Landing page con: {{{{paper_info}}}}". NO generes contenido vacio o placeholder — los datos fluyen mediante referencias.
+12. IMPORTANTE: Encadena datos entre pasos usando {{{{output_variable_name}}}} en los inputs. Si el paso 2 extrae informacion (ej: {{{{paper_info}}}}), pasala al paso 3 como "description": "Landing page con: {{{{paper_info}}}}". NO generes contenido vacio o placeholder - los datos fluyen mediante referencias.
 13. Para tareas que requieran extraer datos de sitios web: usa web_search_real para encontrar URLs, luego browse_web_page en CADA URL individual para obtener el contenido completo, y extract_info_from_text sobre el resultado de browse_web_page para estructurarlo.
 14. SI generas MULTIPLES artefactos (ej: index.html y blog.md), ENLAZALOS entre si: el HTML debe tener links <a href=\"blog.md#articulo-1\"> a las secciones del .md, y el .md debe tener anchors HTML (<a name=\"articulo-1\">) en cada seccion para que los links funcionen.
+15. NUNCA generes dos implementaciones diferentes del mismo componente. Genera UNA sola implementacion completa y coherente. No mezcles canvas y DOM para el mismo juego, ni dos bibliotecas/frameworks distintos para la misma funcionalidad. Si generas un juego con canvas, TODO debe ir dentro del canvas (dibujado, logica, input handling). No añadas una copia DOM-based paralela.
+16. DESPUES de generar artefactos HTML, incluye pasos de validacion funcional: (a) generar un test script JS que verifique funcionalidades clave (ej: "simula 5 disparos, verifica que la puntuacion > 0"), (b) llamar a validate_html_functional con filepath="./juego.html" y test_script="<codigo JS>", (c) verificar que el resultado contenga "passed": true. Si falla, replanifica corrigiendo errores.
+17. El orquestador fuerza automaticamente que todos los archivos se escriban en el directorio "artifacts/<session_id>/". NO necesitas incluir ningun prefijo de ruta - escribe rutas RELATIVAS simples como "juego.html" o "index.html". El orquestador se encarga de redirigirlas al directorio de artefactos.
+18. CRITICO para juegos canvas: genera UN SOLO archivo HTML autocontenido con CSS en <style> dentro del <head> y JS en <script> al FINAL del <body> (despues de todos los elementos HTML). NO separes HTML, CSS y JS en pasos distintos — usa UN solo generate_ui_code. El script JS debe ejecutarse despues de que el DOM este completamente cargado, usando DOMContentLoaded o colocando el <script> al final del body. Si separas en pasos, el orden de los scripts fallara porque el JS se ejecutara antes de que sus dependencias (clases, config) esten definidas.
 
 {fewshot_example}
 
@@ -1013,7 +533,7 @@ Agentes:
 
 
 class PlannerAgent:
-    """Planner agent — generates execution plans via LLM."""
+    """Planner agent - generates execution plans via LLM."""
     name: str = "PlannerAgent"
 
     def __init__(self, instruction: str = ""):
@@ -1052,23 +572,32 @@ def _extract_json(raw: str) -> Optional[Dict[str, Any]]:
     raw = raw.strip()
     if raw.lower().startswith("```json"):
         raw = raw[len("```json"):].strip()
+    if raw.lower().startswith("```"):
+        raw = raw[3:].strip()
     if raw.endswith("```"):
         raw = raw[:-len("```")].strip()
-    first = raw.find("{")
-    last = raw.rfind("}")
-    if first != -1 and last != -1 and last > first:
-        candidate = raw[first: last + 1]
+
+    decoder = json.JSONDecoder()
+    idx = 0
+    while idx < len(raw):
         try:
-            json.loads(candidate)
-            return json.loads(candidate)
+            obj, end = decoder.raw_decode(raw, idx)
+            if isinstance(obj, dict):
+                return obj
+            idx = end
         except json.JSONDecodeError:
-            pass
+            idx += 1
+
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
-        return None
+        pass
+    return None
 
 
+@traceforge.trace(agent="planner.generate", tags=["llm", "planning"])
 async def generate_plan(
     planner_agent: PlannerAgent,
     requirements: str,
@@ -1116,8 +645,10 @@ async def generate_plan_with_world_model(
     calibration_threshold: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Genera world model ANTES del plan; retorna RECLARIFY si confianza baja."""
+    wm_status = "skipped"
     if domain and archetype:
         wm = generate_world_model(requirements, domain, archetype, tools_description=tools_description)
+        wm_status = "ok" if wm else "failed"
     else:
         wm = None
 
@@ -1131,6 +662,7 @@ async def generate_plan_with_world_model(
                 "gaps": [wm.get("gap", "")],
                 "world_model": wm,
                 "plan": None,
+                "wm_status": wm_status,
             }
 
         context = (
@@ -1144,7 +676,7 @@ async def generate_plan_with_world_model(
         )
         requirements = requirements + context
     else:
-        print("  [World Model] No disponible. Procediendo sin simulación prospectiva.")
+        print(f"  [World Model] No disponible (status={wm_status}). Procediendo sin simulación prospectiva.")
 
     plan = await generate_plan(
         planner_agent=planner_agent,
@@ -1155,4 +687,4 @@ async def generate_plan_with_world_model(
         domain=domain,
     )
 
-    return {"action": "EXECUTE", "world_model": wm, "plan": plan}
+    return {"action": "EXECUTE", "world_model": wm, "plan": plan, "wm_status": wm_status}

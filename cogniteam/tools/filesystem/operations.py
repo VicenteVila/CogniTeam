@@ -61,15 +61,11 @@ def read_file_sandboxed(relative_filepath: str) -> Dict[str, Any]:
     print(f"\n-- [read_file_sandboxed] Leyendo '{relative_filepath}'")
     safe_path = is_path_safe(relative_filepath)
     if not safe_path:
-        if os.path.isabs(relative_filepath) and os.path.isfile(relative_filepath):
-            print(f"  Usando ruta absoluta fuera del proyecto: '{relative_filepath}'")
-            safe_path = relative_filepath
-        else:
-            return ToolResponse(
-                success=False,
-                message=f"Ruta '{relative_filepath}' inválida/insegura.",
-                data=None,
-            ).model_dump()
+        return ToolResponse(
+            success=False,
+            message=f"Ruta '{relative_filepath}' inválida/insegura.",
+            data=None,
+        ).model_dump()
 
     try:
         if not os.path.isfile(safe_path):

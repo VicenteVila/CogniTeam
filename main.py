@@ -53,6 +53,7 @@ def _build_tool_map() -> Dict[str, Callable]:
     from cogniteam.tools.scripting.terminal import execute_terminal_command_safe
     from cogniteam.tools.ui.analyze import analyze_html_js
     from cogniteam.tools.ui.combine import combine_ui_to_html
+    from cogniteam.tools.ui.validate import validate_html_functional
     from cogniteam.tools.ui.css import generate_css_code
     from cogniteam.tools.ui.fix import fix_ui_code
     from cogniteam.tools.ui.html import generate_ui_code
@@ -69,6 +70,7 @@ def _build_tool_map() -> Dict[str, Callable]:
         generate_css_code,
         generate_js_code,
         combine_ui_to_html,
+        validate_html_functional,
         generate_textual_artifact,
         analyze_html_js,
         fix_ui_code,
@@ -104,6 +106,7 @@ def _categorize_tools(tool_map: Dict[str, Callable]) -> Dict[str, List[Callable]
     ui_tools_names = {
         "generate_ui_code", "generate_css_code", "generate_js_code",
         "combine_ui_to_html",
+        "validate_html_functional",
         "generate_textual_artifact", "analyze_html_js", "fix_ui_code",
         "read_file_sandboxed", "write_file_sandboxed",
     }
@@ -112,10 +115,19 @@ def _categorize_tools(tool_map: Dict[str, Callable]) -> Dict[str, List[Callable]
         "write_file_sandboxed", "generate_textual_artifact",
         "extract_info_from_text", "execute_terminal_command_safe",
         "generate_ui_code", "generate_css_code", "generate_js_code",
+        "validate_html_functional",
         "generar_guia_cocoguide", "speak_text", "propose_script",
         "apply_script", "validate_script", "view_script_diff",
     }
-    developer_tools_names = set(tool_map.keys()) - ui_tools_names
+    hidden_tools_names = {
+        "delete_file_sandboxed", "delete_directory_sandboxed",
+        "move_or_rename_sandboxed",
+        "git_status", "git_add", "git_commit", "git_diff", "git_log",
+        "git_push", "git_pull",
+        "execute_terminal_command_safe",
+        "create_pdf_from_text", "generar_guia_cocoguide", "speak_text",
+    }
+    developer_tools_names = set(tool_map.keys()) - ui_tools_names - hidden_tools_names
 
     return {
         "ui": [tool_map[n] for n in ui_tools_names if n in tool_map],
@@ -313,6 +325,7 @@ async def main():
         "generate_css_code": "Genera CSS desde descripcion en lenguaje natural. Output: CSS string.",
         "generate_js_code": "Genera JS desde descripcion en lenguaje natural. Output: JS string.",
         "combine_ui_to_html": "Toma HTML, CSS, JS y los combina en un unico archivo HTML con CSS/JS inline. Output: HTML final.",
+        "validate_html_functional": "Carga un archivo HTML en navegador headless, captura errores JS, ejecuta test_script opcional. Output: JSON con passed, console_errors, screenshot.",
         "generate_textual_artifact": "Genera documentacion, descripciones o archivos de texto desde descripcion natural.",
         "analyze_html_js": "Analiza y depura codigo HTML/JS. Output: analisis con errores encontrados.",
         "write_file_sandboxed": "Escribe contenido en un archivo. Usa rutas relativas. Crea directorios automaticamente.",
@@ -381,61 +394,70 @@ async def main():
 
     print(f"\nTarea ({len(requirements)}c) recibida.")
 
-    # --- Scoping Phase ---
-    manifest = None
-    if settings.use_scoping_agent:
-        from cogniteam.scoping.agent import clarify_task
-        from cogniteam.scoping.manifest import TaskManifest
+    # ── Root span TraceForge para todo el pipeline ──
+    with traceforge.span(agent="cogniteam.pipeline", tags=["pipeline", "root"]) as _root_span:
+        # --- Scoping Phase ---
+        manifest = None
+        if settings.use_scoping_agent:
+            from cogniteam.scoping.agent import clarify_task
+            from cogniteam.scoping.manifest import TaskManifest
 
-        manifest: TaskManifest = clarify_task(requirements)
-        requirements = manifest.clarified_task
-        print(f"\nTarea clarificada ({len(requirements)}c). Iniciando ejecución...")
+            manifest: TaskManifest = clarify_task(requirements)
+            requirements = manifest.clarified_task
+            print(f"\nTarea clarificada ({len(requirements)}c). Iniciando ejecución...")
 
-    # ── Extraer dominio y arquetipo del manifest ──
-    _domain = manifest.classification.domain_key if manifest else ""
-    _archetype = manifest.classification.archetype_key if manifest else ""
-    if _domain and _archetype:
-        print(f"  Dominio: {_domain}.{_archetype}")
+        # ── Extraer dominio y arquetipo del manifest ──
+        _domain = manifest.classification.domain_key if manifest else ""
+        _archetype = manifest.classification.archetype_key if manifest else ""
+        if _domain and _archetype:
+            print(f"  Dominio: {_domain}.{_archetype}")
 
-    # ── Snapshot de archivos antes de la ejecución ──
-    import time as _time
-    _timestamp = _time.strftime("%Y%m%d_%H%M%S")
-    _snapshot_before = set()
-    for _root, _dirs, _files in os.walk(settings.project_root):
-        _rel = os.path.relpath(_root, settings.project_root)
-        if _rel.startswith("proyectos_finalizados") or _rel.startswith(".venv") or _rel.startswith(".cogniteam") or _rel.startswith("__pycache__") or _rel.startswith(".git") or _rel.startswith(".venv"):
-            continue
-        for _f in _files:
-            _snapshot_before.add(os.path.normpath(os.path.join(_rel, _f)))
+        # ── Snapshot de archivos antes de la ejecución ──
+        import time as _time
+        _timestamp = _time.strftime("%Y%m%d_%H%M%S")
+        _snapshot_before = set()
+        for _root, _dirs, _files in os.walk(settings.project_root):
+            _rel = os.path.relpath(_root, settings.project_root)
+            if _rel.startswith("proyectos_finalizados") or _rel.startswith(".venv") or _rel.startswith(".cogniteam") or _rel.startswith("__pycache__") or _rel.startswith(".git") or _rel.startswith(".venv"):
+                continue
+            for _f in _files:
+                _snapshot_before.add(os.path.normpath(os.path.join(_rel, _f)))
 
-    flow_result = await run_orchestrated_flow(
-        requirements=requirements,
-        planner_agent=planner_agent,
-        planner_runner=None,
-        tool_functions_map=tool_map,
-        max_replanning=settings.max_replanning_attempts,
-        tools_description=tools_description,
-        agents_description=agents_description,
-        memory_enabled=True,
-        domain=_domain,
-        archetype=_archetype,
-    )
+        flow_result = await run_orchestrated_flow(
+            requirements=requirements,
+            planner_agent=planner_agent,
+            planner_runner=None,
+            tool_functions_map=tool_map,
+            max_replanning=settings.max_replanning_attempts,
+            tools_description=tools_description,
+            agents_description=agents_description,
+            memory_enabled=True,
+            domain=_domain,
+            archetype=_archetype,
+        )
 
-    # ── Generar reporte TraceForge ──
-    # NOTA: traceforge.report() es UNA FUNCION en __init__.py pero hace
-    # from .report import generate_report internamente, lo que SOBRESCRIBE
-    # traceforge.report con el submodulo. Guardamos referencia antes.
-    _tf_report = traceforge.report
-    try:
-        trace_id = traceforge.get_last_trace_id()
-        if trace_id:
-            report_dir = Path(settings.project_root) / "proyectos_finalizados" / f"RUN_{_timestamp}"
-            report_dir.mkdir(parents=True, exist_ok=True)
-            _tf_report(trace_id, format="html", output=str(report_dir / "traceforge_report.html"))
-            _tf_report(trace_id, format="markdown", output=str(report_dir / "traceforge_report.md"))
-            print(f"  TraceForge reportes generados en {report_dir}/")
-    except Exception as e:
-        print(f"  TraceForge report error: {e}")
+        # ── Generar reporte TraceForge ──
+        # NOTA: traceforge.report() hace 'from .report import generate_report' internamente
+        # lo que SOBRESCRIBE traceforge.report (funcion) con el submodulo.
+        # Importamos directo del submodulo para evitar la colision.
+        from traceforge.report import generate_report as _tf_report
+        report_dir = Path(settings.project_root) / "proyectos_finalizados" / f"RUN_{_timestamp}"
+        try:
+            traces = traceforge.list_traces(limit=50)
+            print(f"  Traces disponibles: {len(traces)}")
+            for i, tid in enumerate(traces):
+                spans = traceforge.query(trace_id=tid)
+                agents = set(s.agent for s in spans)
+                print(f"    Trace {i}: {tid[:8]}... ({len(spans)} spans, agents: {agents})")
+            root_id = traceforge.get_last_trace_id()
+            if root_id:
+                _tf_report(root_id, format="html", output=str(report_dir / "traceforge_report.html"))
+                _tf_report(root_id, format="markdown", output=str(report_dir / "traceforge_report.md"))
+                print(f"  TraceForge reportes generados en {report_dir}/")
+        except Exception as e:
+            print(f"  TraceForge report error: {e}")
+
+    # ── Root span closed ──
 
     # ── Guardar resultados en proyectos_finalizados/ ──
     _save_result(flow_result, manifest, _timestamp, _snapshot_before)
