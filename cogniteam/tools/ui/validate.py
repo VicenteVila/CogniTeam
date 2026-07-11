@@ -21,7 +21,8 @@ def validate_html_functional(
     Returns:
         Dict con:
           - success: bool (True si la página cargó sin errores fatales)
-          - data: str resumen legible
+          - message: str legible explicando el resultado
+          - data: str resumen legible (deprecated, usar message)
           - passed: bool (test_script se ejecutó sin excepciones)
           - console_errors: List[str] mensajes de error en consola
           - screenshot_path: str (solo si capture_screenshot=True)
@@ -36,6 +37,7 @@ def validate_html_functional(
     if not os.path.isfile(abs_path):
         return {
             "success": False,
+            "message": f"Archivo no encontrado: {filepath}",
             "data": f"Archivo no encontrado: {filepath}",
             "passed": False,
             "console_errors": [f"FileNotFound: {abs_path}"],
@@ -103,9 +105,11 @@ def validate_html_functional(
 
     except Exception as e:
         elapsed = time.time() - t0
+        err_msg = f"Error al cargar {filepath} en {elapsed:.1f}s: {e}"
         return {
             "success": False,
-            "data": f"Error al cargar {filepath} en {elapsed:.1f}s: {e}",
+            "message": err_msg,
+            "data": err_msg,
             "passed": False,
             "console_errors": console_errors + [f"[BROWSER_ERROR] {e}"],
             "screenshot_path": screenshot_path,
@@ -125,6 +129,7 @@ def validate_html_functional(
 
     return {
         "success": load_ok and passed,
+        "message": " | ".join(summary_parts),
         "data": " | ".join(summary_parts),
         "passed": passed,
         "console_errors": console_errors,

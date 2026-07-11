@@ -497,8 +497,12 @@ async def run_orchestrated_flow(
                         }
 
                     if isinstance(result, dict) and result.get("success") is False:
-                        err_msg = result.get('message', 'error desconocido')
-                        print(f"  Fallo explícito: {err_msg}")
+                        err_msg = result.get('data', result.get('message', 'error desconocido'))
+                        # print full result for debugging
+                        if err_msg == 'error desconocido':
+                            print(f"  Fallo explícito (result completo): {str(result)[:300]}")
+                        else:
+                            print(f"  Fallo explícito: {err_msg}")
                         ctx.store(var_name, result, "failed_explicit")
                         step_ok = False
                         failed_step_detail = f"Paso {step_num}: {resolved} falló con: {err_msg}"
